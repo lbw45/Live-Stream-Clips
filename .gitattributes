@@ -1,0 +1,29 @@
+# Windows batch scripts MUST be CRLF, or cmd.exe shreds them line by line
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Shell scripts must be LF
+*.sh text eol=lf
+
+# Normalize common text files
+*.py text
+*.md text
+*.html text
+*.js text
+*.json text
+*.css text
+*.txt text
+
+# Binary (never touch)
+*.png binary
+*.jpg binary
+*.ico binary
+*.otf binary
+*.ttf binary
+*.whl binary
+*.exe binary
+*.dll binary
+*.mp4 binary
+*.mp3 binary
+*.db binary
