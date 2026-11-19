@@ -87,8 +87,8 @@ FFmpeg 的许可取决于构建方式（LGPL 或 GPL），若你分发的产物�
 **方式一：一键向导（推荐）**
 
 ```bash
-git clone https://github.com/<your-account>/<repo>.git
-cd <repo>
+git clone https://github.com/lbw45/Live-Stream-Clips.git
+cd Live-Stream-Clips
 setup.bat
 ```
 
@@ -99,8 +99,8 @@ FFmpeg / Edge / OCR → 引导首次启动。之后每次启动双击
 **方式二：手动**
 
 ```bash
-git clone https://github.com/<your-account>/<repo>.git
-cd <repo>
+git clone https://github.com/lbw45/Live-Stream-Clips.git
+cd Live-Stream-Clips
 
 python -m venv .venv
 .venv\Scripts\activate
