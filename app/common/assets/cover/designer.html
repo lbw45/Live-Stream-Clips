@@ -1,0 +1,2461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>封面设计</title>
+<style>
+  /* =====================================================================
+     v4.81 视觉重做（，用户：「优化一下这个子窗口弹窗美化」）
+     · 配色/圆角/阴影全部对齐主窗（deep bg + teal 强调 + 12px 圆角）
+     · 结构：顶栏（片名 + 四比例）｜左画布（浮层徽标）｜右功能区（卡片）｜底栏（主/次按钮 + 状态灯）
+     · 只动观感与少量交互（模板卡片、emoji 缩略图、风格名输入框），不动任何接口契约
+     ===================================================================== */
+  :root {
+    /* v4.90（用户 2026-11-14）：「封面图设计的子窗口背景颜色和主窗口的深色相同了，
+       给子窗口做一点点的背景颜色差异化」——原来这套变量是从主窗**照抄**的。
+       子窗是操作台/工具窗，让它**更冷、略亮一档**（同族蓝灰，不与主窗撞色，也不跳脱）：
+         bg  #0b0e13 → #0e141d（ΔR+3 ΔG+6 ΔB+10，偏蓝且微微抬亮）
+         面板/描边同比例上抬，保证卡片层级感不塌。
+       ⚠️ 改这里必须同步 pywebview 的 background_color（否则开窗首帧会闪一下旧色）。 */
+    --bg: #0e141d;
+    --bg-soft: #121b26;
+    --panel: #16202d;
+    --panel-2: #1e2a3a;
+    --line: #263243;
+    --line-soft: rgba(255, 255, 255, .06);
+    --text: #e8ecf3;
+    --dim: #9aa6b8;
+    --mute: #68788c;
+    --accent: #2fd0bd;
+    --accent-2: #43e2cf;
+    --accent-dim: rgba(47, 208, 189, .13);
+    --accent-line: rgba(47, 208, 189, .35);
+    --on-accent: #06251f;
+    --ok: #3fd68f;
+    --warn: #e5a13a;
+    --bad: #f2586a;
+    --in: #0e131c;
+    --r: 12px;
+    --r-sm: 9px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; color: var(--text); overflow: hidden;
+    /* v4.90：**子窗与主窗的差异化**（用户：「背景颜色和主窗口的深色相同了，做一点点差异化」）。
+       只把底色提亮一档，在暗环境里几乎看不出来，所以再叠两处极淡的渐晕：
+       左上偏靛蓝（主调）、右下一点 accent 青（与按钮呼应），底色仍是 --bg。
+       强度都压在 10% 以下 —— 是"看得出这是另一个窗口"，不是"换了个主题"。 */
+    background:
+      radial-gradient(1100px 560px at 16% -12%, rgba(56, 118, 190, .10), transparent 62%),
+      radial-gradient(820px 480px at 100% 112%, rgba(47, 208, 189, .045), transparent 64%),
+      var(--bg);
+    font: 13px/1.5 "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app { height: 100%; display: grid; grid-template-rows: 58px 1fr 56px; }
+  .sp { flex: 1; }
+
+  /* ---------------- 顶栏 ---------------- */
+  .top {
+    display: flex; align-items: center; gap: 12px; padding: 0 14px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #131926, #0e1219);
+    box-shadow: 0 1px 0 var(--line-soft) inset;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .logo {
+    width: 30px; height: 30px; flex: none; border-radius: 10px;
+    display: grid; place-items: center; font-size: 15px;
+    background: linear-gradient(150deg, #2fd0bd, #1b8fa8 70%, #1b6f8f);
+    box-shadow: 0 6px 16px rgba(47, 208, 189, .22), 0 0 0 1px rgba(255, 255, 255, .12) inset;
+  }
+  .brand h1 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: .02em; }
+  .brand .film {
+    max-width: 300px; font-size: 11.5px; color: var(--mute);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  .ratiobar {
+    display: flex; align-items: center; gap: 8px; padding: 3px 3px 3px 12px;
+    background: var(--in); border: 1px solid var(--line); border-radius: 11px;
+  }
+  .ratiobar .lab { font-size: 11px; color: var(--mute); letter-spacing: .04em; }
+  .ratios { display: inline-flex; gap: 3px; }
+  .ratios button {
+    height: 28px; padding: 0 12px; border: 0; border-radius: 8px; cursor: pointer;
+    background: transparent; color: var(--dim); font: inherit; font-size: 12px;
+    transition: background .15s, color .15s, box-shadow .15s;
+  }
+  .ratios button:hover { background: rgba(255, 255, 255, .05); color: var(--text); }
+  .ratios button.on {
+    background: linear-gradient(180deg, var(--accent-2), #25bfae);
+    color: var(--on-accent); font-weight: 700;
+    box-shadow: 0 4px 12px rgba(47, 208, 189, .28);
+  }
+  .iconbtn {
+    width: 30px; height: 30px; flex: none; display: grid; place-items: center;
+    border: 1px solid var(--line); border-radius: 9px; background: transparent;
+    color: var(--dim); font-size: 13px; cursor: pointer; transition: .15s;
+  }
+  .iconbtn:hover { color: #fff; border-color: var(--bad); background: rgba(242, 88, 106, .12); }
+
+  /* ---------------- 主体 ---------------- */
+  .main { display: flex; min-height: 0; }
+
+  .stage {
+    position: relative; flex: 1; min-width: 0; display: flex;
+    align-items: center; justify-content: center; padding: 26px 26px 52px;
+    background:
+      radial-gradient(900px 480px at 50% -10%, rgba(47, 208, 189, .07), transparent 62%),
+      radial-gradient(700px 380px at 100% 110%, rgba(47, 208, 189, .04), transparent 60%),
+      var(--bg);
+  }
+  .stage::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
+    background-image: radial-gradient(rgba(255, 255, 255, .055) 1px, transparent 1px);
+    background-size: 22px 22px;
+    -webkit-mask-image: radial-gradient(circle at 50% 45%, #000 35%, transparent 78%);
+            mask-image: radial-gradient(circle at 50% 45%, #000 35%, transparent 78%);
+  }
+
+  /* v4.87：无边框窗口 —— 顶栏整条当拖动把手（内部按钮/比例药丸除外） */
+  header.top { cursor: default; user-select: none; }
+  header.top.dragging { cursor: grabbing; }
+  header.top button, header.top .ratiobar { cursor: pointer; }
+  /* ============ v5.1：浅色主题（跟随主窗 localStorage.theme） ============
+     用户：「这个封面设计的子窗口没有和主题色联动，我换到白色主题时，这个子窗口的色调还是黑色的」。
+     原理与主窗一致：`html.light` 覆盖 `:root` 的全部变量 ⇒ 引 var(…) 的规则自动跟随；
+     再把子窗里**写死的深色**（顶栏/侧栏/底栏/画布/卡片/输入框，共 16 处）按选择器逐条覆盖。
+     ⚠️ 不动的：`.logo` 品牌青绿渐变、画布上的照片本身、底图的模糊/压暗（那是照片效果） */
+  html.light {
+    --bg: #f5f7fa;
+    --bg-soft: #eef1f5;
+    --panel: #ffffff;
+    --panel-2: #f0f3f7;
+    --line: #d8dee6;
+    --line-soft: rgba(0, 0, 0, .06);
+    --text: #1a1e26;
+    --dim: #5a6572;
+    --mute: #8a95a3;
+    --accent: #1a9e8e;
+    --accent-2: #0d8a7a;
+    --accent-dim: rgba(26, 158, 142, .10);
+    --accent-line: rgba(26, 158, 142, .30);
+    --on-accent: #ffffff;
+    --ok: #22a06b;
+    --warn: #d4942a;
+    --bad: #d94a5a;
+    --in: #ffffff;
+  }
+  /* 写死深色的局部覆盖 */
+  html.light body {
+    background:
+      radial-gradient(1100px 560px at 16% -12%, rgba(56, 118, 190, .06), transparent 62%),
+      radial-gradient(820px 480px at 100% 112%, rgba(47, 208, 189, .05), transparent 64%),
+      var(--bg);
+  }
+  html.light .top { background: linear-gradient(180deg, #ffffff, #f4f6fa); }
+  html.light .panel { background: linear-gradient(180deg, #ffffff, #f7f9fc); }
+  html.light .foot { background: linear-gradient(180deg, #f4f7fb, #edf1f7); }
+  html.light .canvas { background: #e9edf3; }
+  html.light .frameitem { background: #e9edf3; }
+  html.light .btn { background: linear-gradient(180deg, #ffffff, #f1f4f8); color: var(--text); }
+  html.light .btn.primary:hover { color: #ffffff; }
+  html.light .seg button.on { color: var(--on-accent); background: linear-gradient(180deg, #1a9e8e, #158a7c); }
+  html.light .tplcard .thumb { background: #eef2f7; }
+  html.light .bpop,
+  html.light .emopop,
+  html.light .zpop { background: #ffffff; border-color: var(--line); box-shadow: 0 10px 28px rgba(20, 30, 50, .14); }
+  html.light .emoPick,
+  html.light .chip,
+  html.light .cand button { background: #f4f7fb; }
+  html.light .emoPick:hover { background: #e9f4f2; }
+  html.light .stageinfo .badge { background: rgba(0, 0, 0, .04); }
+
+  /* 无系统边框后，页面自己兜一圈极细描边，避免窗口边缘"糊"进桌面 */
+  html, body { border: 1px solid #29333f; }
+
+  /* v4.85：左侧「选其他帧」列 —— 绝对定位，不改动画布居中布局 */
+  .framecol {
+    position: absolute; left: 10px; top: 20px; bottom: 44px; width: 82px;
+    display: flex; flex-direction: column; gap: 6px; z-index: 3;
+    overflow-y: auto; overflow-x: hidden; padding-right: 2px;
+  }
+  /* v4.93（用户：「左侧这个换图按钮优化一下样式，太丑了」）：
+     原来是一圈**绿色虚线** + 竖排四个字，贴着左边缘很扎眼。改成：
+     · 实底 + 细边框的胶囊，hover 才泛青色；
+     · 图标换成内联 SVG（图片框 + 角标箭头），比 🖼 清晰；
+     · 收起态 = 图标 + 横排「换图」两字（48px 宽），不再竖排。 */
+  .framebtn {
+    width: 100%; padding: 8px 2px 7px; font-size: 11px; line-height: 1.25; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--panel-2);
+    color: var(--dim); cursor: pointer; flex: 0 0 auto;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .framebtn:hover { background: var(--accent-dim); color: var(--text); border-color: var(--accent-line); }
+  .framebtn:disabled { opacity: .55; cursor: default; }
+  .framebtn .fbico { display: block; width: 18px; height: 18px; margin: 0 auto 4px; }
+  .framebtn .fbtxt { display: block; }
+  .framebtn .fbmini { display: none; }
+  /* v4.86：收起态 —— 画布不再被挤（用户：「左侧这列占了点宽度」） */
+  .framecol.collapsed { width: 48px; }
+  .framecol.collapsed .framelist { display: none; }
+  .framecol.collapsed .fbtxt { display: none; }
+  .framecol.collapsed .fbmini {
+    display: block; font-size: 9.5px; letter-spacing: .4px; color: var(--dim);
+  }
+  .framecol.collapsed .framebtn { padding: 9px 2px 7px; border-radius: 12px; }
+  .framecol.collapsed .framebtn:hover .fbmini { color: var(--text); }
+  /* v4.89：字号/描边的数值框（原生 number input 自带右侧上下箭头） */
+  .numin {
+    width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 7px;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+    font: inherit; font-size: 12.5px;
+  }
+  .numin:focus { outline: none; border-color: var(--accent-line); }
+  .field .unit { color: var(--mute); font-size: 11px; margin-left: 2px; }
+  /* v4.89：比例栏里的「跟随其他比例」开关 */
+  .syncwrap {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px;
+    color: var(--dim); cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  .syncwrap input { accent-color: var(--accent); }
+
+  /* 列表里选中的那颗 chip 高亮，跟画布上的虚线框对应 */
+  .chip.on { border-color: var(--accent); background: var(--accent-dim); }
+  .framelist { display: flex; flex-direction: column; gap: 6px; }
+  .frameitem {
+    position: relative; padding: 0; border: 2px solid transparent; border-radius: 8px;
+    overflow: hidden; background: #0f1319; cursor: pointer; line-height: 0;
+  }
+  .frameitem img { display: block; width: 100%; height: auto; }
+  .frameitem:hover { border-color: var(--line); }
+  .frameitem.on { border-color: var(--accent); }
+  .frameitem .fs {
+    display: block; line-height: 1.5; font-size: 9.5px; text-align: center;
+    padding: 1px 0; background: rgba(0, 0, 0, .66); color: var(--dim);
+  }
+  .frameitem.clean .fs { color: var(--accent-2); }
+  .fmsg { font-size: 10.5px; color: var(--dim); line-height: 1.5; padding: 4px 2px; }
+
+  .canvas {
+    position: relative; border-radius: 10px; overflow: hidden; user-select: none;
+    background: #12161d;
+    box-shadow: 0 22px 60px rgba(0, 0, 0, .62), 0 0 0 1px rgba(255, 255, 255, .09);
+  }
+  /* v4.99：比例徽标 → 缩放按钮 + 浮层滑块 */
+  .badge.zbtn { cursor: pointer; font-family: inherit; }
+  .badge.zbtn:hover { border-color: var(--accent-line); color: var(--text); }
+  .zpop {
+    position: absolute; left: 12px; bottom: 46px; width: 240px; padding: 10px 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .5); z-index: 30;
+  }
+  .zpop.hidden { display: none; }
+  .zpop .blab { color: var(--dim); font-size: 11px; }
+
+  /* v5.2：文案多输入行（每条 = 画布一行） */
+  .crows { display: flex; flex-direction: column; gap: 6px; }
+  .crow { display: flex; align-items: center; gap: 6px; }
+  .crow .idx {
+    flex: 0 0 18px; text-align: center; font-size: 11px; color: var(--mute);
+    font-variant-numeric: tabular-nums;
+  }
+  .crow input {
+    flex: 1 1 auto; min-width: 0; padding: 7px 9px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--in); color: var(--text);
+    font: inherit; font-size: 12.5px;
+  }
+  .crow input:focus { outline: none; border-color: var(--accent-line); }
+  .crow.on input { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+  .crow.on .idx { color: var(--accent-2); font-weight: 700; }
+  .crow .del {
+    flex: 0 0 auto; width: 22px; height: 22px; line-height: 20px; text-align: center;
+    border-radius: 6px; border: 1px solid var(--line); background: transparent;
+    color: var(--mute); cursor: pointer; font-size: 13px; padding: 0;
+  }
+  .crow .del:hover { color: var(--bad); border-color: var(--bad); }
+  /* v5.2：画布上的文字容器（整块可拖），内部每行一个 .txt */
+  .canvas .txtbox {
+    position: absolute; left: 0; top: 0; cursor: move;
+    white-space: nowrap; padding: 2px 4px; border-radius: 5px;
+  }
+  .canvas .txtbox:hover { outline: 1px dashed var(--accent-line); background: rgba(47, 208, 189, .06); }
+  .canvas .txtline { display: block; white-space: nowrap; }
+  .canvas .txtbox.drag { outline: 1px solid var(--accent); background: rgba(47, 208, 189, .10); }
+
+  /* v4.98：可拖动取景的整图（绝对定位 + 像素摆放，公式见 layoutPhoto） */
+  .canvas img.photo {
+    position: absolute; left: 0; top: 0; display: none;
+    pointer-events: none; user-select: none;
+    will-change: left, top, filter;
+  }
+  .canvas.grabbing { cursor: grabbing; }
+  .canvas.panning { cursor: move; }
+
+  .canvas img.base {
+    display: block; width: 100%; height: 100%; border-radius: 10px;
+    object-fit: fill; pointer-events: none;
+  }
+
+  .txt {
+    position: absolute; cursor: move; white-space: nowrap; letter-spacing: -.02em;
+    font-family: "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    font-weight: 700; line-height: 1.08; padding: 2px 4px; border-radius: 5px;
+    outline: 1px dashed transparent; transition: outline-color .12s, background .12s;
+  }
+  .txt:hover { outline-color: var(--accent-line); background: rgba(47, 208, 189, .06); }
+  .txt.drag { outline: 1px solid var(--accent); background: rgba(47, 208, 189, .10); }
+
+  .emo { position: absolute; cursor: move; border-radius: 8px; transition: box-shadow .12s; }
+  .emo:hover { box-shadow: 0 0 0 1px var(--accent-line); }
+  .emo.sel { outline: 2px dashed var(--accent); outline-offset: 1px; }
+  /* v4.94：用户图片与 emoji 共用 .emo 定位/选中样式，只把圆角收一点 */
+  .emo.emoimg { border-radius: 4px; }
+
+  .hint {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    display: flex; align-items: center; gap: 9px; max-width: 82%;
+    padding: 9px 14px; border-radius: 999px; text-align: center;
+    background: rgba(11, 14, 19, .82); border: 1px solid var(--line);
+    color: var(--dim); font-size: 12px; line-height: 1.45;
+    backdrop-filter: blur(6px); box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  }
+  .spin {
+    width: 14px; height: 14px; flex: none; border-radius: 50%;
+    border: 2px solid rgba(47, 208, 189, .25); border-top-color: var(--accent);
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .stageinfo {
+    position: absolute; left: 14px; right: 14px; bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px;
+    border-radius: 999px; font-size: 11px; color: var(--dim);
+    background: rgba(18, 23, 33, .86); border: 1px solid var(--line);
+    backdrop-filter: blur(8px);
+  }
+  .badge.hot { color: var(--accent-2); border-color: var(--accent-line); }
+  .badge .kbd { margin-left: 2px; }
+
+  /* ---------------- 右功能区 ---------------- */
+  .panel {
+    width: 352px; flex: 0 0 352px; overflow-y: auto; padding: 12px 12px 20px;
+    display: flex; flex-direction: column; gap: 10px;
+    border-left: 1px solid var(--line);
+    background: linear-gradient(180deg, #121721, #0e1219);
+  }
+  /* 底部渐变：提示「下面还有内容」（我的样式在 1080p 缩放屏上要滚一下才露出来） */
+  .panel::after {
+    content: ""; position: sticky; bottom: -1px; display: block; flex: none;
+    height: 26px; margin-top: -26px; pointer-events: none;
+    background: linear-gradient(rgba(14, 18, 25, 0), rgba(14, 18, 25, .96));
+  }
+  .panel::-webkit-scrollbar, .emogrid::-webkit-scrollbar { width: 8px; }
+  .panel::-webkit-scrollbar-thumb, .emogrid::-webkit-scrollbar-thumb {
+    background: #26303f; border-radius: 8px; border: 2px solid transparent; background-clip: padding-box;
+  }
+
+  .sec {
+    border: 1px solid var(--line); border-radius: var(--r); padding: 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, 0));
+  }
+  .sec-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .sec-h .ico { font-size: 13px; opacity: .95; }
+  .sec-h h3 {
+    margin: 0; font-size: 12px; font-weight: 600; color: var(--dim); letter-spacing: .05em;
+  }
+  /* v4.91：「自动折两行」改按钮 —— 外观仍是那个小药丸，只多出可点的手感与开关态 */
+  .sec-h .btntag { cursor: pointer; font-family: inherit; }
+  .sec-h .btntag:hover { color: var(--dim); border-color: var(--line); }
+  .sec-h .btntag.on { color: var(--accent-2); border-color: var(--accent-line); background: var(--accent-dim); }
+
+  .sec-h .tag {
+    margin-left: auto; padding: 1px 7px; border-radius: 999px; font-size: 10.5px;
+    color: var(--mute); background: rgba(255, 255, 255, .04); border: 1px solid var(--line-soft);
+  }
+
+  .row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .row:last-child { margin-bottom: 0; }
+  .row.between { justify-content: space-between; }
+  /* 两列并排（字号 / 描边）——省一行高度，1080p 缩放屏上也能一屏看全 */
+  .row.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field label { min-width: 0; }
+  .row label { color: var(--dim); min-width: 54px; font-size: 12px; }
+  .msg { color: var(--mute); font-size: 11px; }
+  .msg.err, .err { color: var(--bad); }
+  .count { margin-left: auto; font: 11px ui-monospace, Consolas, monospace; color: var(--mute); }
+
+  textarea {
+    width: 100%; min-height: 68px; resize: vertical; padding: 8px 10px;
+    background: var(--in); border: 1px solid var(--line); border-radius: 10px;
+    color: var(--text); font: inherit; line-height: 1.5; transition: border-color .15s, box-shadow .15s;
+  }
+  textarea::placeholder { color: #56657a; }
+  textarea:focus {
+    outline: none; border-color: var(--accent-line);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  input[type="text"], select {
+    flex: 1; min-width: 0; height: 30px; padding: 0 9px;
+    background: var(--in); border: 1px solid var(--line); border-radius: var(--r-sm);
+    color: var(--text); font: inherit; font-size: 12.5px; transition: border-color .15s, box-shadow .15s;
+  }
+  select {
+    appearance: none; padding-right: 26px; cursor: pointer;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%239aa6b8' stroke-width='1.4' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat; background-position: right 9px center;
+  }
+  input[type="text"]:focus, select:focus {
+    outline: none; border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 30px; padding: 0 12px; border-radius: var(--r-sm); cursor: pointer;
+    border: 1px solid var(--line); color: var(--text); font: inherit; font-size: 12.5px;
+    background: linear-gradient(180deg, #1d2634, #161d29);
+    transition: transform .12s, border-color .15s, background .15s, box-shadow .15s;
+  }
+  .btn:hover { border-color: var(--accent-line); transform: translateY(-1px); }
+  .btn:active { transform: none; }
+  .btn.small { height: 27px; padding: 0 10px; font-size: 12px; }
+  .btn.primary {
+    border-color: transparent; font-weight: 700; color: var(--on-accent);
+    background: linear-gradient(180deg, var(--accent-2), #24bda9);
+    box-shadow: 0 8px 20px rgba(47, 208, 189, .24);
+  }
+  .btn.primary:hover { filter: brightness(1.04); color: #04201c; }
+  .btn.ghost { background: transparent; color: var(--dim); }
+  .btn.ghost:hover { color: var(--text); background: rgba(255, 255, 255, .04); }
+  .btn:disabled { opacity: .5; cursor: default; transform: none; }
+
+  .seg {
+    display: inline-flex; flex: 1; gap: 3px; padding: 3px;
+    background: var(--in); border: 1px solid var(--line); border-radius: 10px;
+  }
+  .seg button {
+    flex: 1; height: 26px; border: 0; border-radius: 7px; cursor: pointer;
+    background: transparent; color: var(--dim); font: inherit; font-size: 12px; transition: .15s;
+  }
+  .seg button:hover { color: var(--text); background: rgba(255, 255, 255, .045); }
+  .seg button.on {
+    color: #fff; background: linear-gradient(180deg, #2c3849, #222c3b);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .07) inset;
+  }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 9px; }
+  .tabs button {
+    flex: 1; height: 28px; border-radius: var(--r-sm); cursor: pointer;
+    border: 1px solid var(--line); background: var(--in); color: var(--dim);
+    font: inherit; font-size: 12px; transition: .15s;
+  }
+  .tabs button:hover { color: var(--text); border-color: var(--accent-line); }
+  .tabs button.on {
+    color: var(--accent-2); border-color: var(--accent-line); background: var(--accent-dim);
+    font-weight: 600;
+  }
+
+  /* 样式方案卡片（三选一，缩略图直接显示两行字的配色与对齐） */
+  .tplcards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 9px; }
+  .tplcard {
+    padding: 6px; border-radius: 10px; cursor: pointer; font: inherit;
+    border: 1px solid var(--line); background: var(--in); transition: .15s;
+  }
+  .tplcard:hover { border-color: var(--accent-line); transform: translateY(-1px); }
+  .tplcard.on {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent) inset, 0 8px 18px rgba(47, 208, 189, .13);
+  }
+  .tplcard .thumb {
+    display: flex; flex-direction: column; justify-content: center; gap: 3px;
+    height: 46px; padding: 0 7px; border-radius: 7px; background: #0a0d12; overflow: hidden;
+  }
+  .tplcard .bar { display: block; height: 6px; border-radius: 3px; }
+  .tplcard .nm { display: block; margin-top: 5px; font-size: 10.5px; color: var(--mute); text-align: center; }
+  .tplcard.on .nm { color: var(--accent-2); }
+  .srsel { display: none; }
+
+  .colorrow { display: flex; align-items: center; gap: 8px; }
+  .swatch {
+    position: relative; width: 36px; height: 26px; flex: none; overflow: hidden;
+    border-radius: 8px; border: 1px solid var(--line); cursor: pointer;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .08) inset;
+  }
+  .swatch input[type="color"] {
+    position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px);
+    padding: 0; border: 0; background: none; cursor: pointer;
+  }
+  .hexv { font: 11px ui-monospace, Consolas, monospace; color: var(--mute); }
+
+  /* ---------- 背景调控（v4.82）：开关 + 两个滑块 ---------- */
+  .badge.btn-badge { cursor: pointer; color: var(--text); border-color: var(--line); }
+  .badge.btn-badge:hover { border-color: var(--accent-line); color: var(--accent-2); }
+  .badge.btn-badge.on { border-color: var(--accent-line); color: var(--accent-2); }
+
+  .switch {
+    width: 38px; height: 22px; flex: none; padding: 0; position: relative;
+    border-radius: 999px; border: 1px solid var(--line); background: var(--in);
+    cursor: pointer; transition: background .15s, border-color .15s;
+  }
+  .switch i {
+    position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+    border-radius: 50%; background: #5b6a7d; transition: left .15s, background .15s;
+  }
+  .switch.on { background: var(--accent-dim); border-color: var(--accent-line); }
+  .switch.on i { left: 18px; background: var(--accent); box-shadow: 0 0 8px rgba(47, 208, 189, .6); }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 4px; margin: 6px 0 2px;
+    border-radius: 4px; outline: none; cursor: pointer;
+    background: linear-gradient(90deg, var(--accent) var(--p, 50%), #26303f var(--p, 50%));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: #eafffb; border: 2px solid var(--accent);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .45);
+  }
+  input[type="range"]:disabled { opacity: .45; cursor: default; }
+
+  .bpop {
+    position: fixed; left: 0; top: 0; z-index: 60; width: 268px; display: none;
+    padding: 12px; border-radius: 12px; background: #141a24;
+    border: 1px solid #2a3446; box-shadow: 0 20px 44px rgba(0, 0, 0, .62);
+  }
+  .bpop.show { display: block; animation: pop .14s ease-out; }
+  .brow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .brow:last-child { margin-bottom: 0; }
+  .brow.col { display: block; }
+  .blab { flex: 1; font-size: 12px; color: var(--dim); }
+  .blab b { color: var(--text); font-weight: 600; margin-left: 4px;
+            font-variant-numeric: tabular-nums; }
+
+  /* emoji 下拉窗口 */
+  .emowrap { position: relative; }
+  /* ⚠️ 必须 position: fixed —— 放在 .panel（overflow-y:auto）里的 absolute 弹层会被
+     面板边界裁掉，而且点搜索框会让面板自动滚到底（v4.81 实测截图：只剩搜索框露出来）。
+     位置由 placeEmoPop() 按按钮 rect 现算，空间不够时向上翻。 */
+  .emopop {
+    position: fixed; left: 0; top: 0; z-index: 60;
+    display: none; padding: 10px; border-radius: 12px;
+    background: #141a24; border: 1px solid #2a3446;
+    box-shadow: 0 20px 44px rgba(0, 0, 0, .62);
+  }
+  .emopop.show { display: block; animation: pop .14s ease-out; }
+  @keyframes pop { from { opacity: 0; transform: translateY(-4px); } }
+  .emosearch { position: relative; }
+  .emosearch input { width: 100%; }
+  .emogrid {
+    /* minmax(0, 1fr)：不加这个，格子会被 <img> 的固有宽（128px）顶开 ⇒
+       6 列变 2 列、右侧被裁掉（v4.81 实测截图）。 */
+    display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px;
+    max-height: 214px; overflow-y: auto; margin-top: 8px; padding-right: 2px;
+  }
+  .emoPick {
+    position: relative; aspect-ratio: 1 / 1; min-width: 0; padding: 0; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 9px; background: #0f141c;
+    display: grid; place-items: center; transition: .14s;
+  }
+  .emoPick img { width: 26px; height: 26px; object-fit: contain; }
+  .emoPick:hover { border-color: var(--accent-line); background: #151d28; transform: translateY(-1px); }
+  .emoPick.on {
+    border-color: var(--accent); background: var(--accent-dim);
+    box-shadow: 0 0 0 1px var(--accent) inset;
+  }
+  .emopop .tip { margin-top: 8px; font-size: 10.5px; color: var(--mute); text-align: center; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px 3px 5px;
+    border: 1px solid var(--line); border-radius: 999px; background: #0f141c; font-size: 11.5px;
+  }
+  .chip img { width: 18px; height: 18px; object-fit: contain; }
+  .chip b {
+    width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%;
+    color: var(--mute); cursor: pointer; font-weight: 400; transition: .12s;
+  }
+  .chip b:hover { color: #fff; background: var(--bad); }
+
+  .cand { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .cand:empty { margin: 0; }
+  .cand button {
+    padding: 4px 9px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 11.5px;
+    color: var(--dim); border: 1px solid var(--line); background: #0f141c; transition: .15s;
+  }
+  .cand button:hover { color: var(--text); border-color: var(--accent-line); background: var(--accent-dim); }
+
+  /* ---------------- 底栏 ---------------- */
+  .foot {
+    display: flex; align-items: center; gap: 8px; padding: 0 14px;
+    border-top: 1px solid var(--line);
+    background: linear-gradient(180deg, #0f141b, #0b0e13);
+  }
+  .foot .btn.primary { height: 34px; padding: 0 18px; }
+  .foot .btn.ghost { height: 34px; }
+  .status {
+    display: inline-flex; align-items: center; gap: 7px;
+    flex: 0 1 auto; min-width: 0; max-width: 46vw; font-size: 12px; color: var(--dim);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .status > span { overflow: hidden; text-overflow: ellipsis; }
+  .keys { flex: none; }
+  .dot {
+    width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--mute);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, .03);
+  }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 8px rgba(63, 214, 143, .6); }
+  .dot.warn { background: var(--warn); box-shadow: 0 0 8px rgba(229, 161, 58, .6); }
+  .dot.err { background: var(--bad); box-shadow: 0 0 8px rgba(242, 88, 106, .6); }
+  .keys { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--mute); }
+  .kbd {
+    font: 10px/1.4 ui-monospace, Consolas, monospace; color: var(--dim);
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px;
+  }
+  /* 窗口高度不够时（1080p + 125% 缩放 = 约 778 逻辑像素）收紧一档间距，
+     保证「生成封面」底栏与右侧功能区都能露出来，不用先滚一下才能点。 */
+  @media (max-height: 840px) {
+    .app { grid-template-rows: 54px 1fr 52px; }
+    .stage { padding: 16px 20px 44px; }
+    .panel { gap: 8px; padding: 10px 10px 12px; }
+    .sec { padding: 10px; }
+    .sec-h { margin-bottom: 7px; }
+    .row { margin-bottom: 7px; }
+    .tabs { margin-bottom: 7px; }
+    .tplcards { margin-bottom: 7px; gap: 6px; }
+    .tplcard .thumb { height: 38px; }
+    .foot .btn.primary, .foot .btn.ghost { height: 32px; }
+    textarea { min-height: 54px; }
+    .cand { margin-top: 6px; }
+  }
+  @media (max-width: 1000px) {
+    .keys { display: none; }
+  }
+  @media (max-width: 880px) {
+    .panel { width: 320px; flex-basis: 320px; }
+    .brand .film { max-width: 150px; }
+    .ratiobar .lab { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ================= 顶栏 ================= -->
+  <header class="top">
+    <div class="brand">
+      <span class="logo">🎬</span>
+      <div>
+        <h1>封面设计</h1>
+        <div class="film" id="filmName">正在读取成片…</div>
+      </div>
+    </div>
+    <span class="sp"></span>
+    <div class="ratiobar">
+      <span class="lab">比例</span>
+      <span class="ratios" id="ratios"></span>
+      <!-- v4.89（用户）：**每个比例可以有自己的元素**。不勾＝各比例独立（默认）；
+           勾上＝四个比例共用同一套表情/位置（旧行为）。 -->
+      <label class="syncwrap" title="不勾：每个比例各自一套元素（互不影响）；勾上：四个比例共用同一套">
+        <input type="checkbox" id="ratioSync"> 跟随其他比例
+      </label>
+    </div>
+    <button class="iconbtn" id="btnClose" title="关闭（Esc）">✕</button>
+  </header>
+
+  <!-- ================= 主体 ================= -->
+  <main class="main">
+    <section class="stage" id="stage">
+      <!-- v4.85（用户 2026-11-14）：「新增选择其他帧为封面图，去找尽量画面中没有字幕和
+           字样的帧」—— 左侧竖排：上面是入口，下面是候选帧（点击即换底图）。 -->
+      <div class="framecol collapsed" id="frameCol">
+        <button class="framebtn" id="btnFrames"
+                  title="从成片里找画面最干净（没有字幕/字样）的几帧，选一张当封面底图"><svg class="fbico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><circle cx="8.2" cy="9.2" r="1.5"></circle><path d="M21 15.5l-4.6-4.6L5 20"></path><path d="M15.6 2.6l2.6 2.6-2.6 2.6"></path></svg><span class="fbtxt">选其他帧</span><span class="fbmini">换图</span></button>
+        <div class="framelist" id="frameList"></div>
+      </div>
+      <div class="canvas" id="canvas">
+        <!-- v4.98：底图改成**整图 + CSS 摆放**，在空白处按住拖动即可调整取景
+             （用户：「画布中的图片能不能改为选中的，由我调整图片的画面位置…由我拖动图片调整到最佳位置」）。
+             摆放公式与后端 ImageOps.fit(centering=focus) 完全对应 ⇒ 拖动所见即出图。
+             #base 仍保留，作为整图接口失败时的兜底（后端已裁切+模糊的那张）。 -->
+        <img class="photo" id="photo" alt="">
+        <img class="base" id="base" alt="">
+        <!-- v5.2：文案行由 JS 按 copy.lines 动态生成（几条就几行），容器整体可拖动 -->
+        <div class="txtbox" id="txtBox"></div>
+        <div class="hint" id="hint"><span class="spin"></span><span>加载封面…</span></div>
+      </div>
+      <div class="stageinfo">
+        <!-- v4.99（用户）：徽标改成**按钮** —— 点开出现滑块，滑动改底图放大/缩小（1.0–3.0×） -->
+        <button class="badge hot zbtn" id="sizeBadge" title="点开：调整底图放大倍率（画布比例不变）">3:4 · 1080×1440</button>
+        <div class="zpop hidden" id="zoomPop">
+          <div class="brow col" style="margin:0">
+            <span class="blab">底图放大 <b id="zoomVal">1.0×</b></span>
+            <input type="range" id="bgZoom" min="100" max="300" step="5" value="100">
+          </div>
+          <div class="brow" style="margin-top:2px">
+            <button class="btn small" id="zoomReset" title="回到原始大小（1.0×）">1.0×</button>
+            <span class="sp"></span>
+            <span class="msg">拖动取景不变，只放大画面</span>
+          </div>
+        </div>
+        <span class="badge" id="posBadge">文字位置 7% · 10%</span>
+        <span class="sp"></span>
+        <span class="badge">拖动文字 / emoji 调整位置</span>
+        <button class="badge btn-badge" id="btnBg" title="调整背景模糊与压暗">🎛 背景 · 模糊 22</button>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <!-- 文案 -->
+      <section class="sec">
+        <!-- v5.2（用户）：「文案输入文字的输入框位置，增减输入框，默认是一个输入框，新增一个就一行文案，
+             选中哪条文案才能点击 AI 优化文案，是否换行按钮可以去掉了」
+             ⇒ 每条输入框 = 画布上的一行；「自动折两行」开关已删除（行数由你显式控制）。 -->
+        <div class="sec-h"><span class="ico">✍️</span><h3>封面文案</h3>
+          <span class="tag" id="copyLinesTag">1 行</span>
+        </div>
+        <div class="crows" id="copyRows"></div>
+        <div class="row between" style="margin-top:8px">
+          <button class="btn small" id="btnAddLine" title="再加一行文案（最多 5 行）">＋ 新增一行</button>
+          <button class="btn small" id="btnCopy"
+                  title="只优化**选中那条**：把它压成更短的一句（≤10 字）；这条为空时按片名生成">✨ AI 优化选中</button>
+        </div>
+        <div class="row between" style="margin-top:6px">
+          <span class="msg" id="copyMsg"></span>
+          <span class="count" id="copyCount">0/30</span>
+        </div>
+        <div class="cand" id="cands"></div>
+      </section>
+
+      <!-- 文字样式 -->
+      <section class="sec">
+        <div class="sec-h"><span class="ico">🅰️</span><h3>文字样式</h3><span class="tag" id="tplTag">A · 左对齐双色</span></div>
+        <div class="tabs">
+          <button id="tabNormal" class="on">普通标题</button>
+          <button id="tabFlower">花字</button>
+        </div>
+        <div class="tplcards" id="tplCards"></div>
+        <!-- 机器可读的镜像控件：卡片是主入口，这个 select 留着给探针/老脚本读值 -->
+        <select id="tplSel" class="srsel"></select>
+
+        <div class="row">
+          <label>字体</label>
+          <select id="fontSel">
+            <option value="NotoSansSC">Noto Sans SC Bold（内置）</option>
+          </select>
+        </div>
+        <div class="row two">
+          <!-- v4.89：字号/描边改成**数值 + 上下增减**（用户：「左侧数字，右侧上下增减按钮的那个 ui 控件」）。
+               字号口径＝占画布宽度的百分比（10–30），描边＝相对 1080 基准宽的像素（0–40）。 -->
+          <div class="field">
+            <label>字号 <span class="unit">%</span></label>
+            <input type="number" class="numin" id="sizeNum" min="6" max="30" step="1" value="12">
+          </div>
+          <div class="field">
+            <label>描边 <span class="unit">px</span></label>
+            <input type="number" class="numin" id="strokeNum" min="0" max="40" step="1" value="10">
+          </div>
+        </div>
+        <div class="row two">
+          <div class="field">
+            <label>第一行色</label>
+            <div class="colorrow">
+              <span class="swatch"><input type="color" id="fill1"></span>
+              <span class="hexv" id="fill1Hex">#FF78C8</span>
+            </div>
+          </div>
+          <div class="field">
+            <label>第二行色</label>
+            <div class="colorrow">
+              <span class="swatch"><input type="color" id="fill2"></span>
+              <span class="hexv" id="fill2Hex">#FFBE28</span>
+            </div>
+          </div>
+        </div>
+        <div class="row colorrow" style="margin-top:8px">
+          <label>描边色</label>
+          <span class="swatch"><input type="color" id="strokeFill"></span>
+          <span class="hexv" id="strokeHex">#FFFFFF</span>
+        </div>
+      </section>
+
+      <!-- emoji -->
+      <section class="sec">
+        <div class="sec-h"><span class="ico">😀</span><h3>emoji</h3><span class="tag">可拖动 · 可调大小 · 可重复</span></div>
+        <div class="row emowrap">
+          <button class="btn" id="btnEmoji" style="flex:1">＋ 选择 emoji <span style="color:var(--mute)">▾</span></button>
+          <!-- v4.94（用户）：「在 emoji 这个按钮位置新增一个选择图片的按钮，作用就是选择图片放到画布中，
+               图片的大小也用 emoji 的大小滑块控制」 -->
+          <button class="btn" id="btnEmoImg" style="flex:0 0 auto"
+                  title="选一张本地图片放到封面上（可拖动，大小用下面的 emoji 滑块调）">🖼 选图片</button>
+          <input type="file" id="emoImgFile" accept="image/*" style="display:none">
+          <div class="emopop" id="emoPop">
+            <div class="emosearch">
+              <input type="text" id="emoSearch" placeholder="搜索：小丑 / 火 / 哭 …">
+            </div>
+            <div class="emogrid" id="emoGrid"></div>
+            <div class="tip">点一下加一颗（同一个可以加多次）；画布上可拖动，选中的那颗用下面的滑块调大小</div>
+          </div>
+        </div>
+        <!-- v4.86：单个 emoji 的大小 —— 选中画布/列表里的某个 emoji 后拖动滑块实时改它
+             （用户：「选择对应的emoji后再拖动滑块调整对应的emoji大小」） -->
+        <div class="row" id="emoSizeRow" style="margin-top:8px;display:none">
+          <label class="lab" style="white-space:nowrap">emoji 大小 <b id="emoSizeVal">15%</b></label>
+          <input type="range" id="emoSize" min="4" max="60" step="1" value="15" style="flex:1 1 120px">
+        </div>
+        <div class="chips" id="emoChips"></div>
+      </section>
+
+      <!-- 我的样式 -->
+      <section class="sec">
+        <div class="sec-h"><span class="ico">📌</span><h3>我的样式</h3><span class="tag">存在本机</span></div>
+        <div class="row">
+          <label>已存</label>
+          <select id="myStyleSel"><option value="">（还没有保存的样式）</option></select>
+        </div>
+        <div class="row">
+          <input type="text" id="styleName" placeholder="起个名字，下次直接套用">
+          <button class="btn small" id="btnSaveStyle">存为我的样式</button>
+        </div>
+        <span class="msg" id="myStyleMsg"></span>
+      </section>
+    </aside>
+  </main>
+
+  <!-- ================= 背景调控弹层（v4.82，fixed 定位） ================= -->
+  <div class="bpop" id="bgPop">
+    <div class="brow">
+      <span class="blab">背景模糊</span>
+      <button class="switch on" id="bgOn" role="switch" aria-checked="true" title="开/关模糊"><i></i></button>
+    </div>
+    <div class="brow col">
+      <span class="blab">模糊程度 <b id="bgBlurVal">22</b></span>
+      <input type="range" id="bgBlur" min="0" max="40" step="1" value="22">
+    </div>
+    <div class="brow col">
+      <span class="blab">压暗 <b id="bgShadeVal">47%</b></span>
+      <input type="range" id="bgShade" min="0" max="85" step="1" value="47">
+    </div>
+    <div class="brow col">
+      <span class="blab">取景（画布空白处拖动）<b id="bgFocusVal">50% · 35%</b></span>
+      <div class="brow" style="gap:6px;margin:0">
+        <button class="btn small" id="bgFocusCenter" title="取景回到画面正中">居中</button>
+        <button class="btn small" id="bgFocusReset" title="回到默认（水平居中、垂直偏上保人脸）">默认取景</button>
+        <span class="sp"></span>
+      </div>
+    </div>
+    <div class="brow" style="margin-top:4px">
+      <button class="btn small" id="bgDefault">默认</button>
+      <button class="btn small" id="bgRaw">用原图</button>
+      <span class="sp"></span>
+      <span class="msg" id="bgMsg"></span>
+    </div>
+  </div>
+
+  <!-- ================= 底栏 ================= -->
+  <footer class="foot">
+    <button class="btn primary" id="btnGen">✓ 生成封面</button>
+    <button class="btn ghost" id="btnCancel">取消</button>
+    <span class="sp"></span>
+    <span class="keys"><span class="kbd">Ctrl</span><span class="kbd">Enter</span> 生成<span style="width:8px"></span>
+      <span class="kbd">Esc</span> 关闭</span>
+    <span class="status"><i class="dot" id="dot"></i><span id="status">加载中…</span></span>
+  </footer>
+</div>
+
+<script>
+/* v4.98：封面取景的**纯几何函数**（故意放在 IIFE 外）——
+   前端 layoutPhoto 与后端 ImageOps.fit(centering) 消费同一份公式，
+   node 单测直接从这里取源码执行（参考掘金《图片裁剪总是跑偏》：
+   「把显示矩形作为唯一中间结果，预览和导出都消费它」）。
+   返回：图片在画布上的摆放 {left, top, width, height}（像素）。 */
+/* v5.1：主题跟随主窗 —— 主窗把选择存在 localStorage.theme（file:// 下同源共享），
+   子窗加载时自己读一次；运行中主窗切换会通过桥方法 set_designer_theme 推过来。 */
+function setDesignerTheme(t) {
+  document.documentElement.classList.toggle("light", String(t) === "light");
+}
+window.setDesignerTheme = setDesignerTheme;
+try {
+  /* `?theme=light` 仅供**无头浏览器截图测试**用（pywebview 的 file:// 会丢 query，正常走 localStorage） */
+  const _q = (location.search.match(/[?&]theme=(light|dark)/) || [])[1];
+  setDesignerTheme(_q || localStorage.getItem("theme"));
+} catch (e) { /* 读不到就用深色 */ }
+
+function coverLayout(photoW, photoH, boxW, boxH, fx, fy, zoom) {
+  var cl = function (v) { return Math.max(0, Math.min(1, Number(v) || 0)); };
+  fx = cl(fx); fy = cl(fy);
+  var z = Math.max(1, Math.min(3, Number(zoom) || 1));   // v4.99：取景缩放 1–3×
+  var sc = Math.max(boxW / photoW, boxH / photoH) * z;   // object-fit: cover × zoom
+  var dw = photoW * sc, dh = photoH * sc;
+  var ow = Math.max(0, dw - boxW), oh = Math.max(0, dh - boxH);
+  return { left: -ow * fx, top: -oh * fy, width: dw, height: dh, scale: sc };
+}
+</script>
+<script>
+(function () {
+  "use strict";
+  /* v4.78 教训：桥是**异步注入**的，绝不能缓存成常量（缓存了轮询永远读到同一 undefined）。 */
+  function getBridge() { return (window.pywebview && window.pywebview.api) || null; }
+
+  const $ = function (id) { return document.getElementById(id); };
+  const esc = function (s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  };
+
+  /* 顶部四个比例按钮（3:4 / 4:3 / 9:16 / 16:9）—— v4.83 起只显示比例数字 */
+  /* v4.83（用户）：按钮上**只留比例数字**（不写"方案+序号"）；竖版/横版等说明放 title 提示里 */
+  const RATIOS = [
+    { key: "3x4", label: "3:4", note: "竖版", w: 1080, h: 1440 },
+    { key: "4x3", label: "4:3", note: "横版", w: 1440, h: 1080 },
+    { key: "9x16", label: "9:16", note: "竖屏", w: 1080, h: 1920 },
+    { key: "16x9", label: "16:9", note: "横屏", w: 1920, h: 1080 }
+  ];
+  const TPLS = [
+    { key: "A", label: "A 左对齐双色", sizeRatio: 0.12, lineHeight: 1.08, strokeWidth: 10,
+      fill1: "#FF78C8", fill2: "#FFBE28", strokeFill: "#FFFFFF", align: "left", x: 0.07, y: 0.10 },
+    { key: "B", label: "B 居中大字", sizeRatio: 0.15, lineHeight: 1.02, strokeWidth: 12,
+      fill1: "#FFFFFF", fill2: "#FFE55C", strokeFill: "#5A3E28", align: "center", x: 0.5, y: 0.12 },
+    { key: "C", label: "C 花字", sizeRatio: 0.13, lineHeight: 1.10, strokeWidth: 14,
+      fill1: "#FF5FA2", fill2: "#FFC107", strokeFill: "#FFFFFF", align: "left", x: 0.06, y: 0.09 }
+  ];
+
+  let FILM = "";
+  let cfg = null;
+  let covers = [];
+  let ratio = "3x4";
+  let catalog = [];
+  let emojiSel = new Set();
+  let selEmo = -1;               // 当前选中的 emoji 下标（-1 = 没选）
+  let framesOpen = false;        // v4.86：左侧候选帧列是否展开
+  let framesLoaded = false;      // 本次打开是否已经取过候选（展开不重算）
+  /* v4.82：背景可调（用户：模糊要能自己调 + 是否模糊的开关）
+     v4.98：再加 focus —— 取景焦点（0–1，与后端 ImageOps.fit 的 centering 同义） */
+  /* v5.0：取景（focus/zoom）**按比例各存一份** —— 换个宽高比溢出量完全不同，
+     沿用同一个百分比会落到别的画面上（用户：「切换其他比例操作时，这个图片位置调整有点不好用」）。
+     bg.focus/bg.zoom 是**当前比例**的镜像，*ByRatio 是各比例的存档。 */
+  let bg = {on: true, blur: 22, shade: 0.47, focus: {x: 0.5, y: 0.35}, zoom: 1,
+            focusByRatio: {}, zoomByRatio: {}};
+  /* 整图（拖动取景用）：{url, w, h}；没拿到时回退到后端裁好的 #base */
+  let PHOTO = {url: "", w: 0, h: 0};
+  let photoSeq = 0;
+  let bgTimer = null;
+  const EMO_CACHE = {};                 // code → data URI（桥方法给）
+  const MYSTYLE_KEY = "coverDesigner.myStyles";
+
+  async function slicer(method, path, body) {
+    const api = getBridge();
+    if (!api) throw new Error("桥未就绪");
+    /* 传**对象**（不要 JSON.stringify —— 服务端 body.get() 会报 str） */
+    return await api.slicer_api(method, path, body || null);
+  }
+  async function mediaUrl(rel) {
+    const api = getBridge();
+    if (!api) return { ok: false };
+    return await api.slicer_media_url(rel);
+  }
+
+  /* 底栏状态灯：ok / warn / err / 空（灰） */
+  function setStatus(text, kind) {
+    const t = String(text == null ? "" : text);
+    $("status").textContent = t;
+    $("status").title = t;
+    $("dot").className = "dot" + (kind ? " " + kind : "");
+  }
+
+  /* ---------------- 预览画布 ---------------- */
+  function curRatio() {
+    return RATIOS.filter(function (r) { return r.key === ratio; })[0] || RATIOS[0];
+  }
+  function fitCanvas() {
+    const r = curRatio();
+    const stage = $("stage");
+    const maxW = Math.max(200, stage.clientWidth - 56);
+    const maxH = Math.max(200, stage.clientHeight - 78);
+    let w = maxW, h = w * r.h / r.w;
+    if (h > maxH) { h = maxH; w = h * r.w / r.h; }
+    const c = $("canvas");
+    c.style.width = Math.round(w) + "px";
+    c.style.height = Math.round(h) + "px";
+    paintText();
+  }
+
+  /* 把**一整段**文案按实测宽度折成最多两行（与后端 cover_design._copy_lines 同口径：
+     宽度上限 = 画布宽 × 0.86；第二行装剩余，绝不丢字）。 */
+  /* ⚠️ v5.8 标注：**本函数自 v5.2 起已无调用者**（「自动折两行 / reflow」按需求删除后就没用了）。
+     保留只为"以后可能想恢复折行"时不至于要重写；**不要再往这里加逻辑** ——
+     现在的行数由「文案输入框条数」（`copy.lines`）决定，后端 `cover_design._copy_lines` 是唯一出处。
+     真要删：连本注释一起删。⚠️ 注意冒烟里有一条"S 里不许再出现折行调用"的断言（扫全文，含注释）——
+     所以**这段注释里也不能写真函数名加括号的调用字样**，否则会像 K162 那样假红（v5.8 现场踩过一次）。 */
+  function wrapToLines(text, fontPx, canvasW) {
+    const t = String(text || "").replace(/\s+/g, " ").trim();
+    if (!t) return ["", ""];
+    const cv = document.createElement("canvas");
+    const ctx = cv.getContext("2d");
+    ctx.font = '700 ' + Math.round(fontPx) + "px 'Noto Sans SC', 'Microsoft YaHei', sans-serif";
+    const maxW = canvasW * 0.86;
+    const lines = [];
+    let cur = "";
+    for (const ch of t) {
+      if (ctx.measureText(cur + ch).width > maxW && cur && lines.length === 0) {
+        lines.push(cur);
+        cur = ch;
+      } else {
+        cur += ch;
+      }
+    }
+    if (cur) {
+      if (!lines.length) lines.push(cur);
+      else if (lines.length === 1) lines.push(cur);
+      else lines[1] += cur;
+    }
+    return [lines[0] || "", lines[1] || ""];
+  }
+
+  /* v5.2：按 copy.lines 渲染多行（几条画几行；第 1 行 fill1、其余 fill2）。
+     容器 #txtBox 整体可拖动，行元素 .txtline 用普通流式排列（不再各自绝对定位）。
+     超框仍按**最长一行**统一缩字号 —— 与后端 _text_layer 完全同口径（预览 = 出图）。 */
+  function paintText() {
+    if (!cfg) return;
+    const st = cfg.style || {};
+    const copy = cfg.copy || {};
+    const box = $("txtBox");
+    if (!box) return;
+    const c = $("canvas");
+    const cw = c.clientWidth || 1;
+    const ch = c.clientHeight || 1;
+    const size0 = Math.max(10, (st.sizeRatio || 0.12) * cw);
+    const stroke = Math.max(1, (st.strokeWidth || 10) * (cw / 1080));
+    const align = st.align || "left";
+    const x = (st.x || 0.07) * cw;
+    const y0 = (st.y || 0.1) * ch;
+    const lh = st.lineHeight || 1.08;
+    const all = (cfg.copy && Array.isArray(cfg.copy.lines)) ? cfg.copy.lines : copyLines();
+    let rows = all.map(function (v) { return String(v || "").trim(); }).filter(Boolean);
+    if (!rows.length) rows = [""];
+    /* 超框：按最长一行统一缩字号 */
+    let size = size0;
+    const maxW = cw * 0.86;
+    const ctx0 = document.createElement("canvas").getContext("2d");
+    ctx0.font = '700 ' + Math.round(size0) + "px 'Noto Sans SC', 'Microsoft YaHei', sans-serif";
+    const widest = rows.reduce(function (m, v) { return Math.max(m, ctx0.measureText(v).width); }, 0);
+    if (widest > maxW && widest > 0) size = Math.max(10, size0 * Math.max(0.5, maxW / widest));
+    /* 行元素按需增删（复用既有节点，避免每次都重建） */
+    while (box.children.length < rows.length) {
+      const d = document.createElement("div");
+      d.className = "txtline";
+      box.appendChild(d);
+    }
+    while (box.children.length > rows.length) box.removeChild(box.lastChild);
+    rows.forEach(function (v, i) {
+      const el = box.children[i];
+      el.textContent = v;
+      el.style.fontSize = size + "px";
+      el.style.lineHeight = String(lh);
+      el.style.webkitTextStroke = stroke + "px " + (st.strokeFill || "#fff");
+      el.style.color = (i === 0 ? (st.fill1 || "#fff") : (st.fill2 || "#fff"));
+    });
+    box.style.left = x + "px";
+    box.style.top = y0 + "px";
+    box.style.transform = (align === "center") ? "translateX(-50%)" : "none";
+    box.style.display = rows.join("") ? "block" : "none";
+    /* 左下徽标：百分比位置（拖动时实时变，给"到底动了多少"一个参照） */
+    $("posBadge").textContent = "文字位置 " +
+      Math.round((st.x || 0.07) * 100) + "% · " + Math.round((st.y || 0.1) * 100) + "%";
+    paintEmoji();
+  }
+
+  async function emoData(code) {
+    if (EMO_CACHE[code]) return EMO_CACHE[code];
+    const api = getBridge();
+    if (!api || !api.cover_emoji_url) return "";
+    try {
+      const r = await api.cover_emoji_url(code);
+      if (r && r.ok && r.url) { EMO_CACHE[code] = r.url; return r.url; }
+    } catch (e) { /* ignore */ }
+    return "";
+  }
+
+  function paintEmoji() {
+    const c = $("canvas");
+    const cw = c.clientWidth || 1;
+    const ch = c.clientHeight || 1;
+    document.querySelectorAll("#canvas .emo").forEach(function (n) { n.remove(); });
+    (cfg && cfg.emojis || []).forEach(function (e, i) {
+      const s = Math.max(8, (e.size || 0.12) * cw);
+      const isImg = (e.type === "image");
+      const d = document.createElement("img");
+      /* v4.94：图片与 emoji 共用 size（宽 = 画布宽 × size），高度按原图比例；
+         emoji 是正方形所以两者视觉一致。 */
+      d.className = "emo" + (isImg ? " emoimg" : "") + (i === selEmo ? " sel" : "");
+      d.dataset.i = String(i);
+      d.style.width = s + "px";
+      d.style.height = isImg ? "auto" : s + "px";
+      d.style.left = ((e.x || 0) * cw) + "px";
+      d.style.top = ((e.y || 0) * ch) + "px";
+      d.alt = "";
+      c.appendChild(d);
+      if (isImg) {
+        d.src = e.data || "";
+      } else {
+        emoData(e.code).then(function (url) { if (url) d.src = url; });
+      }
+    });
+  }
+
+  /* v4.80：**emoji 可选中 + 可拖动**（用户：emoji 加了不能移、原有的也选不中）。
+     点一下选中（虚线框），按住拖动改 cfg.emojis[i].x/y，限制在画布内。 */
+  (function bindEmojiDrag() {
+    let drag = null;             // {i, sx, sy, ox, oy}
+    $("canvas").addEventListener("mousedown", function (ev) {
+      const t = ev.target.closest && ev.target.closest(".emo");
+      if (!t || !cfg) return;
+      const i = parseInt(t.dataset.i, 10);
+      if (!(i >= 0)) return;
+      selEmo = i;
+      document.querySelectorAll("#canvas .emo").forEach(function (n, k) {
+        n.classList.toggle("sel", k === i);
+      });
+      /* v4.86：画布上点选也要让「列表 chip 高亮 + 大小滑块」跟上 */
+      document.querySelectorAll("#emoChips .chip").forEach(function (n, k) {
+        n.classList.toggle("on", k === i);
+      });
+      syncEmoSize();
+      const e = (cfg.emojis || [])[i] || {};
+      drag = {i: i, sx: ev.clientX, sy: ev.clientY, ox: e.x || 0, oy: e.y || 0};
+      ev.preventDefault();
+      ev.stopPropagation();
+    });
+    window.addEventListener("mousemove", function (ev) {
+      if (!drag || !cfg) return;
+      const c = $("canvas");
+      const cw = c.clientWidth || 1;
+      const ch = c.clientHeight || 1;
+      const e = (cfg.emojis || [])[drag.i] || {};
+      const s = e.size || 0.15;
+      const maxX = Math.max(0, 1 - s * (cw / cw));      // 尺寸是相对**宽**，x 上限 1-size
+      const maxY = Math.max(0, 1 - s * (cw / ch));
+      e.x = Math.min(maxX, Math.max(0, drag.ox + (ev.clientX - drag.sx) / cw));
+      e.y = Math.min(maxY, Math.max(0, drag.oy + (ev.clientY - drag.sy) / ch));
+      cfg.emojis[drag.i] = e;
+      paintEmoji();
+      document.querySelectorAll("#canvas .emo").forEach(function (n, k) {
+        n.classList.toggle("sel", k === drag.i);
+      });
+    });
+    window.addEventListener("mouseup", function () { drag = null; });
+  })();
+
+  /* v4.98：在画布**空白处**按住拖动 = 调整底图取景（拖的是图片，不是文字/emoji）。
+     换算：拖 dx 像素 ⇒ 图片右移 ⇒ 焦点 x 减小 dx/溢出宽（clamp 0–1）。 */
+  (function bindPhotoPan() {
+    const c = $("canvas");
+    let pan = null;
+    c.addEventListener("mousedown", function (ev) {
+      if (!PHOTO.w || !cfg) return;
+      const t = ev.target;
+      /* 落在文字/emoji 上的拖动交给它们自己（那两套监听在 document/window 上，这里先挡掉） */
+      if (t && t.closest && t.closest(".txt, .emo")) return;
+      const cw = c.clientWidth || 1, ch = c.clientHeight || 1;
+      const lay = coverLayout(PHOTO.w, PHOTO.h, cw, ch, bg.focus.x, bg.focus.y, bg.zoom);
+      const ow = Math.max(0, lay.width - cw);
+      const oh = Math.max(0, lay.height - ch);
+      pan = {sx: ev.clientX, sy: ev.clientY, fx: bg.focus.x, fy: bg.focus.y,
+             ow: ow, oh: oh, moved: false};
+      c.classList.add("panning");
+      ev.preventDefault();
+    });
+    window.addEventListener("mousemove", function (ev) {
+      if (!pan) return;
+      const dx = ev.clientX - pan.sx, dy = ev.clientY - pan.sy;
+      if (!pan.moved && Math.abs(dx) + Math.abs(dy) < 2) return;
+      pan.moved = true;
+      c.classList.add("grabbing");
+      c.classList.remove("panning");
+      if (pan.ow > 0) bg.focus.x = focusClamp(pan.fx - dx / pan.ow);
+      if (pan.oh > 0) bg.focus.y = focusClamp(pan.fy - dy / pan.oh);
+      layoutPhoto();
+    });
+    window.addEventListener("mouseup", function () {
+      if (!pan) return;
+      const moved = pan.moved;
+      pan = null;
+      c.classList.remove("panning");
+      c.classList.remove("grabbing");
+      if (moved) {
+        applyBg(true);                       // 写进 cfg.background.focus（保存时一起提交）
+        setStatus("取景已调整（记得点「生成封面」保存）", "ok");
+      }
+    });
+  })();
+
+  /* 拖动文字（v5.2：整块容器一起拖，行数多少都一样） */
+  (function bindDrag() {
+    let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+    function down(ev) {
+      if (!cfg) return;
+      const box = $("txtBox");
+      if (!box) return;
+      dragging = true;
+      sx = ev.clientX; sy = ev.clientY;
+      ox = cfg.style.x || 0.07; oy = cfg.style.y || 0.1;
+      box.classList.add("drag");
+      ev.preventDefault();
+      ev.stopPropagation();          // 别让画布的"拖底图取景"抢走
+    }
+    function move(ev) {
+      if (!dragging || !cfg) return;
+      const c = $("canvas");
+      const box = $("txtBox");
+      const cw = c.clientWidth || 1;
+      const ch = c.clientHeight || 1;
+      /* v4.80：**不能移出画布** —— 按文字块实际宽高算上限（居中时左边界留半宽） */
+      const tw = box.offsetWidth / cw;
+      const th = box.offsetHeight / ch;
+      const centered = (cfg.style.align || "left") === "center";
+      const maxX = Math.max(0, 1 - (centered ? tw * 0.5 : tw));
+      const maxY = Math.max(0, 1 - th);
+      const nx = ox + (ev.clientX - sx) / cw;
+      const ny = oy + (ev.clientY - sy) / ch;
+      cfg.style.x = Math.min(maxX, Math.max(centered ? tw * 0.5 : 0, nx));
+      cfg.style.y = Math.min(maxY, Math.max(0, ny));
+      paintText();
+    }
+    function up() {
+      dragging = false;
+      const box = $("txtBox");
+      if (box) box.classList.remove("drag");
+    }
+    const box = $("txtBox");
+    if (box) box.addEventListener("mousedown", down);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  })();
+
+  /* ---------------- 渲染控件 ---------------- */
+  function renderRatios() {
+    $("ratios").innerHTML = RATIOS.map(function (r) {
+      const tip = r.label + " " + (r.note || "") + " · " + r.w + "×" + r.h;
+      return '<button class="ratio' + (r.key === ratio ? " on" : "") + '" data-key="' +
+        esc(r.key) + '" title="' + esc(tip) + '" aria-label="' + esc(tip) + '">' +
+        esc(r.label) + "</button>";
+    }).join("");
+  }
+
+  /* 样式方案：三张**缩略卡片**（两行字的配色/对齐直接画出来），点击即套用。
+     `#tplSel` 仍同步写入，供探针/老脚本读值（机器可读镜像，见 CSS .srsel）。 */
+  function renderTplCards() {
+    const cur = (cfg && cfg.template) || "A";
+    $("tplCards").innerHTML = TPLS.map(function (t) {
+      const align = (t.align === "center") ? "center" : "flex-start";
+      return '<button class="tplcard' + (t.key === cur ? " on" : "") + '" data-key="' + esc(t.key) + '">' +
+        '<span class="thumb" style="align-items:' + align + '">' +
+          '<i class="bar" style="width:76%;background:' + esc(t.fill1) + '"></i>' +
+          '<i class="bar" style="width:52%;background:' + esc(t.fill2) + '"></i>' +
+        '</span>' +
+        '<span class="nm">' + esc(t.label) + '</span>' +
+      '</button>';
+    }).join("");
+    const t = TPLS.filter(function (x) { return x.key === cur; })[0] || TPLS[0];
+    $("tplTag").textContent = t.key + " · " + String(t.label).replace(/^[A-C]\s*/, "");
+  }
+
+  /* v4.80：画布底图用**无字底图**（/api/edits/cover/base，裁切+模糊+压暗）；
+     之前用已烧字的那张，叠上可拖文字就成"两份文案"（用户实测反馈）。 */
+  const BASE_CACHE = {};
+  /* v4.82：缓存键必须带上「模糊/压暗」——只按比例缓存，滑块拖了也不会换图。 */
+  function baseKey(ratioKey) {
+    return ratioKey + "|" + (bg.on ? bg.blur : 0) + "|" + Math.round(bg.shade * 100);
+  }
+  /* ---------------- v4.98：拖动底图调整取景 ----------------
+     需求（2026-11-14）：「封面设计的画布中的图片能不能改为选中的，由我调整图片的画面位置，
+     画布固定比例就行，就是由我拖动图片调整到最佳位置」。
+
+     几何（**必须与后端同一公式**，否则预览 ≠ 出图）：
+       · 后端：`ImageOps.fit(im, (W,H), centering=(fx,fy))`
+         ⇒ 先按 s = max(W/w0, H/h0) 缩放，再按 (fx,fy) 取裁切窗口
+       · 前端：把整图按同一个 s 放大，左上角摆到 `-ow*fx, -oh*fy`
+         （ow/oh = 放大后相对画布的溢出量）—— 两者裁出来是同一块画面。
+     模糊/压暗：后端是 PIL GaussianBlur(radius) + 黑色 alpha 叠加；
+     前端用 CSS `blur()` 与 `brightness()` 近似（radius 按 1080 基准宽折算到画布像素）。
+     精度说明：拖动时是 CSS 预览，点「生成封面」后由后端出精确图。 */
+  /* v5.0：取景的"切比例存/取"（与 emoji 的 stashEmojis/loadEmojiSetFor 同思路） */
+  function stashView() {
+    if (!bg) return;
+    bg.focusByRatio = bg.focusByRatio || {};
+    bg.zoomByRatio = bg.zoomByRatio || {};
+    bg.focusByRatio[ratio] = {x: focusClamp(bg.focus.x), y: focusClamp(bg.focus.y)};
+    bg.zoomByRatio[ratio] = Math.max(1, Math.min(3, Number(bg.zoom) || 1));
+  }
+  function loadView(key) {
+    if (!bg) return;
+    const f = (bg.focusByRatio || {})[key];
+    bg.focus = f ? {x: focusClamp(f.x), y: focusClamp(f.y)} : {x: 0.5, y: 0.35};
+    const z = (bg.zoomByRatio || {})[key];
+    bg.zoom = isFinite(Number(z)) ? Math.max(1, Math.min(3, Number(z))) : 1;
+    if ($("bgZoom")) {
+      $("bgZoom").value = String(Math.round(bg.zoom * 100));
+      syncRangeFill($("bgZoom"));
+    }
+    if ($("zoomVal")) $("zoomVal").textContent = (Math.round(bg.zoom * 100) / 100).toFixed(2) + "×";
+    if ($("bgFocusVal")) {
+      $("bgFocusVal").textContent = Math.round(bg.focus.x * 100) + "% · " +
+        Math.round(bg.focus.y * 100) + "%";
+    }
+    layoutPhoto();
+  }
+
+  function focusClamp(v) { return Math.max(0, Math.min(1, Number(v) || 0)); }
+
+  function layoutPhoto() {
+    const c = $("canvas"), el = $("photo");
+    if (!c || !el || !PHOTO.w || !PHOTO.h) return;
+    const cw = c.clientWidth || 1, ch = c.clientHeight || 1;
+    /* v4.98：摆放走纯函数 coverLayout（单测覆盖，见 node 单测脚本） */
+    const lay = coverLayout(PHOTO.w, PHOTO.h, cw, ch, bg.focus.x, bg.focus.y, bg.zoom);
+    el.style.width = lay.width + "px";
+    el.style.height = lay.height + "px";
+    el.style.left = lay.left.toFixed(2) + "px";
+    el.style.top = lay.top.toFixed(2) + "px";
+    /* 模糊按 1080 基准宽折算（后端 blur 是 1080 宽画布上的像素半径） */
+    const blurCss = bg.on ? (bg.blur * cw / 1080) : 0;
+    /* 压暗：后端叠黑色 alpha=shade ⇒ CSS 用 brightness(1-shade) 近似 */
+    el.style.filter = "blur(" + blurCss.toFixed(2) + "px) brightness(" +
+      Math.max(0.15, 1 - bg.shade).toFixed(3) + ")";
+    el.style.display = "block";
+    $("base").style.display = "none";                     // 用整图了，后端裁好的兜底图收起
+    $("bgFocusVal").textContent = Math.round(fx * 100) + "% · " + Math.round(fy * 100) + "%";
+  }
+
+  async function loadPhoto() {
+    const seq = ++photoSeq;
+    try {
+      const r = await slicer("GET", "/api/edits/cover/photo?name=" + encodeURIComponent(FILM));
+      if (seq !== photoSeq) return;                        // 又切了比例/片子，老响应丢掉
+      const d = (r && r.data) || {};
+      if (r.status === 200 && d.ok && d.url) {
+        PHOTO = {url: d.url, w: Number(d.width) || 0, h: Number(d.height) || 0};
+        $("photo").src = d.url;
+        $("photo").onload = function () { if (seq === photoSeq) layoutPhoto(); };
+        if ($("photo").complete) layoutPhoto();
+        $("hint").style.display = "none";
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function baseUrl(ratioKey) {
+    return "/api/edits/cover/base?name=" + encodeURIComponent(FILM) +
+      "&key=" + encodeURIComponent(ratioKey) +
+      "&blur=" + encodeURIComponent(bg.on ? bg.blur : 0) +
+      "&shade=" + encodeURIComponent(Number(bg.shade).toFixed(3));
+  }
+  /* v4.98：底图优先走整图（可拖动取景）；整图拿不到才回退到后端裁好的 #base。 */
+  async function loadBackdrop(busy) {
+    if (await loadPhoto()) return;
+    $("photo").style.display = "none";
+    $("base").style.display = "block";
+    loadBase(busy);
+  }
+  function loadBase(busy) {
+    const ck = baseKey(ratio);
+    if (BASE_CACHE[ck]) {
+      $("base").src = BASE_CACHE[ck];
+      $("hint").style.display = "none";
+      if (busy && $("bgMsg")) $("bgMsg").textContent = "已更新";
+      return;
+    }
+    if (busy) {
+      $("hint").innerHTML = '<span class="spin"></span><span>正在应用背景…</span>';
+      $("hint").style.display = "flex";
+    }
+    slicer("GET", baseUrl(ratio)).then(function (res) {
+      const d = (res && res.data) || {};
+      if (res.status === 200 && d.ok && d.url) {
+        BASE_CACHE[ck] = d.url;
+        $("base").src = d.url;
+        $("hint").style.display = "none";
+        if (busy && $("bgMsg")) $("bgMsg").textContent = "已更新（未保存）";
+      } else {
+        const msg = String(d.error || res.status);
+        /* 「未实现的接口」= 常驻服务还是旧版本（新端点只在 reload 后存在，见 K175）；
+           这类错误光写「底图取不到」用户无从下手，直接给可执行的动作。 */
+        $("hint").innerHTML = '<span>' + esc(
+          msg.indexOf("未实现") >= 0 || msg.indexOf("404") >= 0
+            ? "本地服务还是旧版本：请双击 reload-services.bat，再关掉本窗口重开"
+            : "底图取不到：" + msg) + "</span>";
+        $("hint").style.display = "flex";
+        if ($("bgMsg")) $("bgMsg").textContent = "更新失败";
+      }
+    }).catch(function (e) {
+      $("hint").innerHTML = "<span>底图取不到：" + esc(e.message || e) + "</span>";
+      $("hint").style.display = "flex";
+    });
+  }
+  function applyRatio() {
+    const r = curRatio();
+    fitCanvas();
+    renderRatios();
+    $("sizeBadge").textContent = r.key.replace("x", ":") + " · " + r.w + "×" + r.h;
+    loadBackdrop(false);          // v4.98：优先整图（可拖动取景），拿不到才用后端裁好的图
+  }
+
+  /* ---------------- v4.85：选其他帧（找没有字幕/字样的帧） ----------------
+     需求（2026-11-14）：「新增选择其他帧为封面图，去找尽量画面中没有字幕和字样的帧为图，
+     备选多几帧为图到左侧……给我选择」。
+     后端 /api/edits/cover/frames 抽 2fps 海选 + 逐帧 OCR 分区统计（y>65% 判为烧的字幕），
+     无字幕的帧排在最前；首次十几秒，之后走缓存。 */
+  async function loadFrames(force) {
+    const btn = $("btnFrames");
+    const old = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = "找帧中…";
+    $("frameList").innerHTML = '<div class="fmsg">正在抽帧并识别字幕…</div>';
+    try {
+      const r = await slicer("POST", "/api/edits/cover/frames",
+        {name: FILM, count: 6, force: !!force});
+      const d = (r && r.data) || {};
+      if (!d.ok) {
+        $("frameList").innerHTML = '<div class="fmsg">' + esc(d.error || "取帧失败") + "</div>";
+        return;
+      }
+      window.__frames = d.frames || [];
+      framesLoaded = true;
+      renderFrames(d);
+    } catch (e) {
+      $("frameList").innerHTML = '<div class="fmsg">取帧失败：' + esc(e.message || e) + "</div>";
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = old;
+    }
+  }
+
+  /* v4.86：左侧列展开/收起（收起只留图标按钮，画布拿回宽度） */
+  function syncFrameCol() {
+    const col = $("frameCol");
+    if (!col) return;
+    col.classList.toggle("collapsed", !framesOpen);
+    $("btnFrames").title = framesOpen
+      ? "收起候选帧（Shift+点 = 忽略缓存重新找）"
+      : "从成片里找画面最干净（没有字幕/字样）的几帧，选一张当封面底图";
+  }
+
+  function renderFrames(d) {
+    const list = $("frameList");
+    const frames = d.frames || [];
+    if (!frames.length) { list.innerHTML = '<div class="fmsg">没找到候选帧</div>'; return; }
+    list.innerHTML = frames.map(function (f, i) {
+      const clean = (f.subBlocks || 0) === 0;
+      const label = clean ? "✓ 无字幕" : ("含字幕 " + f.subBlocks);
+      return '<button class="frameitem' + (clean ? " clean" : "") + '" data-i="' + i + '"' +
+        ' title="' + esc(f.tSec.toFixed(1) + "s · " + (clean ? "没有字幕" : ("字幕 " + f.subBlocks + " 处")) +
+          " · 干净分 " + f.clean + (f.texts && f.texts.length ? ("\n画面文字：" + f.texts.join(" / ")) : "")) +
+        '"><img src="' + f.thumb + '" alt=""><span class="fs">' + esc(label) + "</span></button>";
+    }).join("");
+    if (d.degraded) {
+      list.insertAdjacentHTML("beforeend",
+        '<div class="fmsg">OCR 不可用，按画面边缘估算（仅供筛选）</div>');
+    } else if (d.cleanTotal === 0) {
+      list.insertAdjacentHTML("beforeend",
+        '<div class="fmsg">本片每帧都有字幕，已按"字幕最少"排序</div>');
+    } else {
+      list.insertAdjacentHTML("beforeend",
+        '<div class="fmsg">全场 ' + d.pool + " 帧里，" + d.cleanTotal + " 帧无字幕" +
+        (d.cached ? "（缓存）" : "") + "</div>");
+    }
+  }
+
+  $("btnFrames").addEventListener("click", function (ev) {
+    /* v4.86：折叠式 —— 收起态只留图标（不挤画布）；点开时才去找帧。
+       Shift+点 = 忽略缓存强制重算。 */
+    if (ev.shiftKey) {
+      framesOpen = true;
+      syncFrameCol();
+      loadFrames(true);
+      return;
+    }
+    if (framesOpen) {
+      framesOpen = false;
+      syncFrameCol();
+      return;
+    }
+    framesOpen = true;
+    syncFrameCol();
+    if (!framesLoaded) loadFrames(false);
+  });
+  $("frameList").addEventListener("click", async function (ev) {
+    const b = ev.target.closest && ev.target.closest(".frameitem");
+    if (!b) return;
+    const f = (window.__frames || [])[parseInt(b.dataset.i, 10)];
+    if (!f) return;
+    b.disabled = true;
+    try {
+      const r = await slicer("POST", "/api/edits/cover/frame", {name: FILM, frame: f.name});
+      const d = (r && r.data) || {};
+      if (r.status !== 200 || !d.ok) {
+        setStatus("换成这一帧失败：" + (d.error || r.status), "err");
+        return;
+      }
+      /* 底图按比例缓存了 data URI —— 换图必须全清，否则看到的还是旧图 */
+      Object.keys(BASE_CACHE).forEach(function (k) { delete BASE_CACHE[k]; });
+      document.querySelectorAll("#frameList .frameitem").forEach(function (x) {
+        x.classList.remove("on");
+      });
+      b.classList.add("on");
+      loadBase(true);
+      setStatus("已换成 " + f.tSec.toFixed(1) + "s 那一帧（点「生成封面」才会写进四档）", "ok");
+    } finally {
+      b.disabled = false;
+    }
+  });
+
+  function toHex(v, dflt) {
+    return (v && /^#[0-9a-fA-F]{6}$/.test(v)) ? v.toLowerCase() : dflt;
+  }
+
+  function syncHex() {
+    $("fill1Hex").textContent = String($("fill1").value || "").toUpperCase();
+    $("fill2Hex").textContent = String($("fill2").value || "").toUpperCase();
+    $("strokeHex").textContent = String($("strokeFill").value || "").toUpperCase();
+  }
+
+  /* ---------------- v5.2：文案多输入行 ----------------
+     需求：「文案输入文字的输入框位置，增减输入框，默认是一个输入框，新增一个就一行文案，
+     选中哪条文案才能点击 AI 优化文案，是否换行按钮可以去掉了」。
+     ⇒ `copy.lines` 是唯一真源（数组，每条 = 画布一行，最多 5 条）；老配置按 line1/line2 迁移。 */
+  let selLine = 0;                       // 当前选中的那一行（AI 只作用于它）
+
+  function copyLines() {
+    if (!cfg) return [""];
+    cfg.copy = cfg.copy || {};
+    if (!Array.isArray(cfg.copy.lines)) {
+      const cp = cfg.copy;
+      let arr;
+      if (String(cp.line1 || "").trim() || String(cp.line2 || "").trim()) {
+        arr = [cp.line1 || "", cp.line2 || ""];           // 老配置：两行原样恢复
+      } else if (String(cp.text || "").trim()) {
+        arr = String(cp.text).split(/\r?\n/);             // 再老：按回车/整段
+      } else {
+        arr = [""];
+      }
+      arr = arr.map(function (x) { return String(x || "").trim(); }).filter(Boolean);
+      cfg.copy.lines = (arr.length ? arr : [""]).slice(0, 5);
+    }
+    if (!cfg.copy.lines.length) cfg.copy.lines = [""];
+    return cfg.copy.lines;
+  }
+
+  function renderCopyRows() {
+    const rows = copyLines();
+    if (selLine > rows.length - 1) selLine = rows.length - 1;
+    if (selLine < 0) selLine = 0;
+    $("copyRows").innerHTML = rows.map(function (v, i) {
+      return '<div class="crow' + (i === selLine ? " on" : "") + '" data-i="' + i + '">' +
+        '<span class="idx">' + (i + 1) + "</span>" +
+        '<input type="text" maxlength="30" data-i="' + i + '" value="' + esc(v) + '" ' +
+        'placeholder="' + (i === 0 ? "第一行文案（≤30 字）" : "第 " + (i + 1) + " 行文案") + '">' +
+        (rows.length > 1 ? '<button class="del" data-del="' + i + '" title="删掉这一行">×</button>' : "") +
+        "</div>";
+    }).join("");
+    $("copyLinesTag").textContent = rows.length + " 行";
+    updateCount();
+  }
+
+  function updateCount() {
+    if (!cfg) { $("copyCount").textContent = "0/30"; return; }
+    const rows = copyLines();
+    const v = String(rows[Math.max(0, Math.min(selLine, rows.length - 1))] || "");
+    $("copyCount").textContent = v.length + "/30";
+  }
+
+  /* ---------------- 背景（v4.82）：cfg.background ⇄ 控件 ━━━━━━━━━ */
+  function readBg() {
+    const b = (cfg && cfg.background) || {};
+    const rawBlur = (b.blur === undefined || b.blur === null || b.blur === "") ? 22 : Number(b.blur);
+    const rawShade = (b.shade === undefined || b.shade === null || b.shade === "") ? 0.47 : Number(b.shade);
+    const f = (b.focus && typeof b.focus === "object") ? b.focus : {};
+    const fnum = function (v, dflt) {
+      const n = Number(v);
+      return isFinite(n) ? Math.max(0, Math.min(1, n)) : dflt;
+    };
+    bg = {
+      on: b.on !== false,
+      blur: Math.max(0, Math.min(40, isFinite(rawBlur) ? Math.round(rawBlur) : 22)),
+      shade: Math.max(0, Math.min(0.85, isFinite(rawShade) ? rawShade : 0.47)),
+      focus: {x: 0.5, y: 0.35},
+      zoom: 1,
+      focusByRatio: {},
+      zoomByRatio: {}
+    };
+    /* v5.0：按比例存档；老配置（单值 focus/zoom）迁到**当前比例**，其余比例用默认 */
+    const byF = (b.focusByRatio && typeof b.focusByRatio === "object") ? b.focusByRatio : {};
+    const byZ = (b.zoomByRatio && typeof b.zoomByRatio === "object") ? b.zoomByRatio : {};
+    Object.keys(byF).forEach(function (k) {
+      const v = byF[k] || {};
+      bg.focusByRatio[k] = {x: fnum(v.x, 0.5), y: fnum(v.y, 0.35)};
+    });
+    Object.keys(byZ).forEach(function (k) {
+      const v = Number(byZ[k]);
+      if (isFinite(v)) bg.zoomByRatio[k] = Math.max(1, Math.min(3, v));
+    });
+    const cur = bg.focusByRatio[ratio] || {x: fnum(f.x, 0.5), y: fnum(f.y, 0.35)};
+    bg.focus = {x: cur.x, y: cur.y};
+    bg.focusByRatio[ratio] = {x: cur.x, y: cur.y};
+    const cz = bg.zoomByRatio[ratio];
+    const z0 = isFinite(Number(cz)) ? Number(cz)
+             : (isFinite(Number(b.zoom)) ? Number(b.zoom) : 1);
+    bg.zoom = Math.max(1, Math.min(3, z0));
+    bg.zoomByRatio[ratio] = bg.zoom;
+  }
+  function paintRange(el) {
+    const min = parseFloat(el.min || "0");
+    const max = parseFloat(el.max || "100");
+    const v = parseFloat(el.value || "0");
+    const pct = max > min ? ((v - min) / (max - min)) * 100 : 0;
+    el.style.setProperty("--p", pct.toFixed(1) + "%");
+  }
+  function updateBgBadge() {
+    $("btnBg").textContent = bg.on ? "🎛 背景 · 模糊 " + bg.blur : "🎛 背景 · 原图";
+    const isDefault = bg.on && bg.blur === 22 && Math.abs(bg.shade - 0.47) < 0.005;
+    $("btnBg").classList.toggle("on", !isDefault);
+  }
+  function applyBg(writeCfg) {
+    $("bgOn").classList.toggle("on", bg.on);
+    $("bgOn").setAttribute("aria-checked", bg.on ? "true" : "false");
+    $("bgBlur").value = String(bg.blur);
+    $("bgBlur").disabled = !bg.on;
+    $("bgShade").value = String(Math.round(bg.shade * 100));
+    $("bgBlurVal").textContent = String(bg.blur);
+    $("bgShadeVal").textContent = Math.round(bg.shade * 100) + "%";
+    paintRange($("bgBlur"));
+    paintRange($("bgShade"));
+    updateBgBadge();
+    $("bgFocusVal").textContent = Math.round(bg.focus.x * 100) + "% · " +
+      Math.round(bg.focus.y * 100) + "%";
+    if (writeCfg && cfg) {
+      const _f = {x: Number(bg.focus.x.toFixed(4)), y: Number(bg.focus.y.toFixed(4))};
+      bg.focusByRatio[ratio] = _f;                     // v5.0：按比例存档
+      bg.zoomByRatio[ratio] = Number(bg.zoom.toFixed(3));
+      cfg.background = {on: bg.on, blur: bg.blur, shade: Number(bg.shade.toFixed(3)),
+                        focusByRatio: bg.focusByRatio,
+                        zoomByRatio: bg.zoomByRatio,
+                        focus: _f,                     // 单值镜像（老版本读法兼容）
+                        zoom: Number(bg.zoom.toFixed(3))};
+    }
+  }
+  /* 滑块拖动时不要每个 px 都请求：260ms 防抖，请求期间画布显示"正在应用背景…" */
+  function scheduleBaseRefresh() {
+    /* v4.98：模糊/压暗/取景都改成本地 CSS 立即生效（原来每次都要请求后端重渲染，260ms 防抖）。
+       出图仍由后端按 cfg 精确渲染 —— 位置公式两边一致，模糊是近似。 */
+    if (bgTimer) clearTimeout(bgTimer);
+    bgTimer = setTimeout(function () {
+      layoutPhoto();
+      if ($("bgMsg")) $("bgMsg").textContent = "已更新（未保存）";
+    }, 60);
+  }
+
+  /* ---------------- v4.89：每个比例一套元素 ----------------
+     需求（2026-11-14）：「我在 3:4 封面图的最下方放个表情，切换到其他比例时这个元素会跟随着
+     跑到最下面，我需要的是其他比例是不同样式的元素的」。
+     旧实现只有**一份** cfg.emojis（百分比坐标），四个比例共用 —— 换了画布高宽比，同一个百分比
+     位置看起来就"跑"了。现在：cfg.emojisByRatio = {key: [...]} 各存各的；
+     cfg.emojis 始终是**当前比例**那份（既有渲染/保存代码一行不用改）；
+     cfg.ratioSync = true 时退回旧的"四个比例共用一套"。
+     ⚠️ 默认 **false**（各比例独立）——这正是用户要的。 */
+  function ratioSyncOn() { return !!(cfg && cfg.ratioSync); }
+  function stashEmojis() {
+    if (!cfg) return;
+    cfg.emojisByRatio = cfg.emojisByRatio || {};
+    cfg.emojisByRatio[ratio] = cfg.emojis || [];
+  }
+  function loadEmojiSetFor(key) {
+    if (!cfg) return;
+    if (!ratioSyncOn()) cfg.emojis = (cfg.emojisByRatio || {})[key] || [];
+    selEmo = -1;
+    syncEmojiSelFromCfg();
+    renderEmojiChips();
+    paintEmoji();
+  }
+
+  function syncControls() {
+    const st = cfg.style || {};
+    const cp = cfg.copy || {};
+    copyLines();               // v5.2：把老配置（line1/line2/text）迁成 lines
+    $("fill1").value = toHex(st.fill1, "#ff78c8");
+    $("fill2").value = toHex(st.fill2, "#ffbe28");
+    $("strokeFill").value = toHex(st.strokeFill, "#ffffff");
+    $("tplSel").innerHTML = TPLS.map(function (t) {
+      return '<option value="' + t.key + '">' + esc(t.label) + "</option>";
+    }).join("");
+    $("tplSel").value = cfg.template || "A";
+    renderCopyRows();          // v5.2：文案多输入行（含选中态与字数）
+    syncAllRanges();           // v4.94：滑块绿条按当前值初始化（含背景模糊/压暗）
+    /* v4.89：字号（% of 画布宽）/ 描边（px）改成数值框 —— 直接回填数字 */
+    $("sizeNum").value = String(Math.round(parseFloat(st.sizeRatio || 0.12) * 100));
+    $("strokeNum").value = String(Math.round(parseFloat(st.strokeWidth || 10)));
+    $("tabNormal").classList.toggle("on", (cfg.template || "A") !== "C");
+    $("tabFlower").classList.toggle("on", (cfg.template || "A") === "C");
+    $("emoGrid").querySelectorAll(".emoPick").forEach(function (b) {
+      b.classList.toggle("on", emojiSel.has(b.dataset.code));
+    });
+    renderTplCards();
+    renderEmojiChips();
+    renderMyStyles();
+    syncHex();
+    updateCount();
+    readBg();
+    applyBg(true);          // 配置里的背景参数写回控件，并补一份到 cfg（保存时一起落盘）
+  }
+
+  function renderEmojiChips() {
+    const box = $("emoChips");
+    /* v4.86：**按实例**渲染（不是按 code 去重）—— 同一个 emoji 加两次就是两颗 chip，
+       各自有位置和大小；点 chip = 选中它（配合下方大小滑块），点 × = 只删这一颗。 */
+    const list = (cfg && cfg.emojis) || [];
+    if (!list.length) {
+      box.innerHTML = '<span class="msg">还没加 emoji —— 点上面的按钮挑一个（同一个可以加多次）</span>';
+      syncEmoSize();
+      return;
+    }
+    box.innerHTML = list.map(function (e, i) {
+      const isImg = (e.type === "image");
+      const it = isImg ? { name: "图片" }
+        : (catalog.filter(function (c) { return c.code === e.code; })[0] || { name: e.code });
+      const on = (i === selEmo) ? " on" : "";
+      const thumb = isImg
+        ? '<img data-img="' + i + '" alt="">'
+        : '<img data-code="' + esc(e.code) + '" alt="">';
+      return '<span class="chip' + on + '" data-i="' + i + '" title="点这里选中它，再用下面的滑块调大小">' +
+        thumb + '<span>' + esc(it.name) + "</span>" +
+        ' <b data-del="' + i + '" title="只移除这一个">×</b></span>';
+    }).join("");
+    box.querySelectorAll("img[data-code]").forEach(function (im) {
+      emoData(im.dataset.code).then(function (url) { if (url) im.src = url; });
+    });
+    box.querySelectorAll("img[data-img]").forEach(function (im) {
+      const e = list[parseInt(im.dataset.img, 10)];
+      if (e) im.src = e.data || "";
+    });
+    syncEmoSize();
+  }
+
+  /* v4.94（用户：「emoji 大小滑块左右滑动时，绿色条没有跟着滑块移动，固定在一半」）：
+     根因：range 的轨道用 `linear-gradient(90deg, accent var(--p,50%), …)` 画填充，
+     但 **没有任何地方更新 `--p`** ⇒ 永远 50%。这里按当前值算出百分比写回去。
+     用事件委托挂在 document 上，以后新加的滑块（背景模糊/压暗等）也自动生效。 */
+  function syncRangeFill(el) {
+    if (!el || el.type !== "range") return;
+    const min = Number(el.min || 0);
+    const max = Number(el.max || 100);
+    const v = Number(el.value || 0);
+    const pct = (max > min) ? ((v - min) / (max - min)) * 100 : 0;
+    el.style.setProperty("--p", Math.max(0, Math.min(100, pct)).toFixed(2) + "%");
+  }
+  function syncAllRanges() {
+    document.querySelectorAll('input[type="range"]').forEach(syncRangeFill);
+  }
+  document.addEventListener("input", function (ev) {
+    const t = ev.target;
+    if (t && t.type === "range") syncRangeFill(t);
+  }, true);
+
+  /* v4.86：大小滑块 —— 只作用于**当前选中的那一颗** emoji（size 是相对画布宽度） */
+  function syncEmoSize() {
+    const row = $("emoSizeRow"), sl = $("emoSize"), val = $("emoSizeVal");
+    if (!row || !sl || !val) return;
+    const e = ((cfg && cfg.emojis) || [])[selEmo];
+    if (!e) { row.style.display = "none"; return; }
+    row.style.display = "flex";
+    const pct = Math.round((e.size || 0.15) * 100);
+    sl.value = String(Math.max(4, Math.min(60, pct)));
+    val.textContent = pct + "%";
+    syncRangeFill(sl);            // v4.94：绿条要跟着滑块走（以前 --p 没人更新，永远停在 50%）
+  }
+  /* 选中的 code 集合：只用于「选择面板里哪些已加过」的高亮 */
+  function syncEmojiSelFromCfg() {
+    emojiSel = new Set(((cfg && cfg.emojis) || []).map(function (e) { return e.code; }));
+    $("emoGrid").querySelectorAll(".emoPick").forEach(function (b) {
+      b.classList.toggle("on", emojiSel.has(b.dataset.code));
+    });
+  }
+
+  function loadMyStyles() {
+    try { return JSON.parse(localStorage.getItem(MYSTYLE_KEY) || "{}") || {}; }
+    catch (e) { return {}; }
+  }
+  function renderMyStyles() {
+    const all = loadMyStyles();
+    const keys = Object.keys(all);
+    $("myStyleSel").innerHTML = keys.length
+      ? '<option value="">（选一个套用）</option>' + keys.map(function (k) {
+          return '<option value="' + esc(k) + '">' + esc(k) + "</option>";
+        }).join("")
+      : '<option value="">（还没有保存的样式）</option>';
+  }
+
+  /* emoji 面板里的缩略图按需加载（40 张 × 约 7KB base64，本地桥很快；
+     不在启动时全拉，避免开窗卡一下） */
+  function fillEmojiThumbs() {
+    $("emoGrid").querySelectorAll("img[data-code]").forEach(function (im) {
+      if (im.getAttribute("src")) return;
+      emoData(im.dataset.code).then(function (url) { if (url) im.src = url; });
+    });
+  }
+
+  /* ---------------- 数据加载 ---------------- */
+  async function loadDesign() {
+    /* v5.2：`?demo=1` —— 无桥环境（无头截图 / 纯浏览器预览）用内置示例配置渲染 UI。
+       必须放在最前面：没有 pywebview 桥时 `slicer()` 的 Promise 永不 settle，后面的代码根本走不到。
+       只在显式带参数时生效，正常路径完全不受影响。 */
+    if (/[?&]demo=1/.test(location.search)) {
+      cfg = {
+        template: "A",
+        copy: { lines: ["第一行文案演示", "第二行文案演示"],
+                line1: "第一行文案演示", line2: "第二行文案演示" },
+        style: { sizeRatio: 0.12, lineHeight: 1.08, strokeWidth: 10,
+                 fill1: "#FF78C8", fill2: "#FFBE28", strokeFill: "#1b1b1b",
+                 align: "left", x: 0.07, y: 0.1 },
+        emojis: [], emojisByRatio: {},
+        background: { on: true, blur: 22, shade: 0.47 }
+      };
+      selLine = 1;
+      syncControls();
+      paintText();
+      $("hint").style.display = "none";
+      setStatus("演示模式（?demo=1）：仅用于预览界面，不会写任何文件", "warn");
+      return;
+    }
+    setStatus("正在生成/读取封面…");
+    try {
+      const r = await slicer("POST", "/api/edits/cover", { name: FILM });
+      if (r.status !== 200) {
+        setStatus("封面生成失败：" + ((r.data && r.data.error) || r.status), "err");
+        return;
+      }
+      covers = (r.data || {}).covers || [];
+      const d = await slicer("GET", "/api/edits/cover/design?name=" + encodeURIComponent(FILM));
+      if (d.status !== 200 || !(d.data && d.data.ok)) {
+        setStatus("设计配置读取失败：" + ((d.data && d.data.error) || d.status), "err");
+        return;
+      }
+      cfg = d.data.config || {};
+      catalog = d.data.emojiCatalog || [];
+      /* v4.89：老配置只有一份 cfg.emojis ⇒ 归到**当前比例**，其他比例从空开始 */
+      cfg.emojisByRatio = cfg.emojisByRatio || {};
+      if (!Object.keys(cfg.emojisByRatio).length && cfg.emojis) {
+        cfg.emojisByRatio[ratio] = cfg.emojis;
+      }
+      if (!cfg.ratioSync) cfg.emojis = cfg.emojisByRatio[ratio] || [];
+      $("ratioSync").checked = !!cfg.ratioSync;
+      emojiSel = new Set((cfg.emojis || []).map(function (e) { return e.code; }));
+      $("emoGrid").innerHTML = catalog.map(function (c) {
+        return '<button class="emoPick" data-code="' + esc(c.code) + '" data-name="' +
+          esc(c.name) + '" title="' + esc(c.name) + '"><img data-code="' + esc(c.code) +
+          '" alt=""></button>';
+      }).join("");
+      applyRatio();
+      syncControls();
+      paintText();
+      setStatus((r.data.generated ? "本次已重新生成" : "已有封面，直接复用") +
+        " · 拖动文字/emoji 调位置，改完点「生成封面」", "ok");
+    } catch (e) {
+      setStatus("加载失败：" + (e.message || e), "err");
+    }
+  }
+
+  /* ---------------- 事件 ---------------- */
+  $("ratios").addEventListener("click", function (ev) {
+    const b = ev.target.closest && ev.target.closest(".ratio");
+    if (!b) return;
+    const next = b.dataset.key || "3x4";
+    if (next === ratio) return;
+    stashEmojis();                 // 先把当前比例这套收好（同步模式下是幂等写）
+    stashView();                   // v5.0：取景/缩放也按比例存
+    ratio = next;
+    applyRatio();
+    loadEmojiSetFor(next);         // 取这个比例自己的一份（同步模式下不动）
+    loadView(next);                // v5.0：切到该比例自己的取景（没有就是默认居中偏上）
+  });
+
+  /* v4.89：「跟随其他比例」开关（比例栏最上方） */
+  $("ratioSync").addEventListener("change", function () {
+    if (!cfg) return;
+    cfg.ratioSync = !!this.checked;
+    if (cfg.ratioSync) {
+      setStatus("已开启「跟随」：四个比例共用同一套元素", "ok");
+    } else {
+      stashEmojis();
+      setStatus("已关闭「跟随」：每个比例各自一套元素（互不影响）", "ok");
+    }
+  });
+
+  /* v5.2：多行输入（事件委托；输入时不重建 DOM，免得丢焦点） */
+  $("copyRows").addEventListener("input", function (ev) {
+    const inp = ev.target;
+    if (!inp || inp.tagName !== "INPUT" || !cfg) return;
+    const i = parseInt(inp.dataset.i, 10);
+    if (!isFinite(i)) return;
+    copyLines()[i] = inp.value;
+    selLine = i;
+    updateCount();
+    paintText();
+  });
+  $("copyRows").addEventListener("focusin", function (ev) {
+    const inp = ev.target;
+    if (!inp || inp.tagName !== "INPUT") return;
+    const i = parseInt(inp.dataset.i, 10);
+    if (!isFinite(i)) return;
+    selLine = i;
+    $("copyRows").querySelectorAll(".crow").forEach(function (r, k) {
+      r.classList.toggle("on", k === i);      // 只切样式，不重建
+    });
+    updateCount();
+  });
+  $("copyRows").addEventListener("click", function (ev) {
+    const del = ev.target.closest && ev.target.closest(".del");
+    if (del && cfg) {
+      const rows = copyLines();
+      if (rows.length <= 1) { setStatus("至少要留一行文案", "warn"); return; }
+      const i = parseInt(del.dataset.del, 10);
+      rows.splice(i, 1);
+      selLine = Math.max(0, Math.min(selLine, rows.length - 1));
+      renderCopyRows();
+      paintText();
+      return;
+    }
+    const row = ev.target.closest && ev.target.closest(".crow");
+    if (row) {
+      const i = parseInt(row.dataset.i, 10);
+      if (isFinite(i)) { selLine = i; renderCopyRows(); }
+    }
+  });
+  $("btnAddLine").addEventListener("click", function () {
+    if (!cfg) return;
+    const rows = copyLines();
+    if (rows.length >= 5) { setStatus("最多 5 行文案", "warn"); return; }
+    rows.push("");
+    selLine = rows.length - 1;
+    renderCopyRows();
+    paintText();
+    const inp = $("copyRows").querySelector('.crow[data-i="' + selLine + '"] input');
+    if (inp) inp.focus();
+  });
+
+  $("btnCopy").addEventListener("click", async function () {
+    const btn = this;
+    btn.disabled = true;
+    /* v4.84（用户 2026-11-14）：「这个 AI 优化文案的按钮，是优化**上方的文案内容**的，
+       因为是封面文案，所以优化后的文案字数可以少一点」。
+       以前发的是 `{title: cfg.copy.line1, summary: FILM}` —— 画布第一行 + 片名，
+       用户填在框里的原文根本没进模型（而且后端 import 路径是坏的，点了必然失败）。
+       现在：框里有字 ⇒ 以它为源**压缩**；框里空 ⇒ 退回按片名生成。 */
+    /* v5.2：**只优化选中的那条**（需求：「选中哪条文案才能点击 AI 优化文案」） */
+    const rows0 = copyLines();
+    const sel = Math.max(0, Math.min(selLine, rows0.length - 1));
+    const cur = String(rows0[sel] || "").trim();
+    $("copyMsg").textContent = (cur ? "优化第 " + (sel + 1) + " 行中…" : "第 " + (sel + 1) + " 行为空，按片名生成…");
+    try {
+      const r = await slicer("POST", "/api/edits/cover/copy",
+        { text: cur, title: FILM, summary: String(rows0[0] || "") });
+      const cands = ((r || {}).data || {}).candidates || [];
+      if (!cands.length) {
+        const note = ((r || {}).data || {}).note || "";
+        $("copyMsg").textContent = note || "没生成出候选（可手填）";
+        return;
+      }
+      $("copyMsg").textContent = cur ? "点一条替换：" : "点一条填入：";
+      window.__cands = cands;
+      $("cands").innerHTML = cands.map(function (c, i) {
+        const n = ((c.line1 || "") + (c.line2 || "")).length;
+        return '<button class="candBtn" data-i="' + i + '">' + esc(c.line1) + " / " +
+          esc(c.line2) + "（" + n + "字" + (c.tone ? "·" + esc(c.tone) : "") + "）</button>";
+      }).join("");
+    } catch (e) {
+      $("copyMsg").textContent = "生成失败：" + (e.message || e);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  $("cands").addEventListener("click", function (ev) {
+    const b = ev.target.closest && ev.target.closest(".candBtn");
+    if (!b) return;
+    const c = (window.__cands || [])[parseInt(b.dataset.i, 10)];
+    if (!c) return;
+    const joined = ((c.line1 || "") + (c.line2 || "")).trim();
+    /* v5.2：写回**选中的那一行**（不碰其它行），然后重绘 */
+    const rows1 = copyLines();
+    const k = Math.max(0, Math.min(selLine, rows1.length - 1));
+    rows1[k] = joined;
+    renderCopyRows();
+    paintText();
+    if (c.emoji) {
+      cfg.emojis = [{ code: c.emoji, x: 0.62, y: 0.03, size: 0.16 }];
+      selEmo = 0;
+      syncEmojiSelFromCfg();
+      renderEmojiChips();
+      paintEmoji();
+    }
+  });
+
+  function applyTpl(key) {
+    const t = TPLS.filter(function (x) { return x.key === key; })[0] || TPLS[0];
+    cfg.style = cfg.style || {};
+    Object.keys(t).forEach(function (k) { if (k !== "key" && k !== "label") cfg.style[k] = t[k]; });
+    cfg.template = t.key;
+    syncControls();
+    paintText();
+  }
+  $("tplSel").addEventListener("change", function () { applyTpl(this.value); });
+  $("tplCards").addEventListener("click", function (ev) {
+    const b = ev.target.closest && ev.target.closest(".tplcard");
+    if (!b) return;
+    applyTpl(b.dataset.key || "A");
+  });
+  $("tabNormal").addEventListener("click", function () { applyTpl("A"); });
+  $("tabFlower").addEventListener("click", function () { applyTpl("C"); });
+
+  /* v4.89：字号数值框（6–30 %，相对画布宽度；改字号要重折行） */
+  function readInt(el, lo, hi, dflt) {
+    const v = Math.round(parseFloat(el.value));
+    if (!isFinite(v)) return dflt;
+    return Math.max(lo, Math.min(hi, v));
+  }
+  $("sizeNum").addEventListener("input", function () {
+    if (!cfg) return;
+    cfg.style.sizeRatio = readInt(this, 6, 30, 12) / 100;
+    paintText();               // v5.2：不再折行，只重绘
+  });
+  $("sizeNum").addEventListener("change", function () {
+    if (!cfg) return;
+    this.value = String(Math.round(parseFloat(cfg.style.sizeRatio || 0.12) * 100));
+  });
+  /* v5.2：原「自动折两行 / 手动换行」开关与 reflow() 已删除 ——
+     行数由文案输入框的条数决定，不再自动折行。 */
+
+  /* v4.89：描边数值框（0–40 px，相对 1080 基准宽） */
+  $("strokeNum").addEventListener("input", function () {
+    if (!cfg) return;
+    cfg.style.strokeWidth = readInt(this, 0, 40, 10);
+    paintText();
+  });
+  $("strokeNum").addEventListener("change", function () {
+    if (!cfg) return;
+    this.value = String(Math.round(parseFloat(cfg.style.strokeWidth || 10)));
+  });
+  $("fill1").addEventListener("input", function () {
+    if (!cfg) return; cfg.style.fill1 = this.value; syncHex(); paintText();
+  });
+  $("fill2").addEventListener("input", function () {
+    if (!cfg) return; cfg.style.fill2 = this.value; syncHex(); paintText();
+  });
+  $("strokeFill").addEventListener("input", function () {
+    if (!cfg) return; cfg.style.strokeFill = this.value; syncHex(); paintText();
+  });
+
+  /* 通用弹层定位：贴着锚点按钮，下面放不下就向上翻 */
+  function placePop(pop, r) {
+    const w = pop.offsetWidth || 268;
+    pop.style.left = Math.max(12, Math.min(window.innerWidth - w - 12, r.right - w)) + "px";
+    const h = pop.offsetHeight || 220;
+    const below = window.innerHeight - r.bottom - 12;
+    pop.style.top = (below >= h ? r.bottom + 8 : Math.max(12, r.top - h - 8)) + "px";
+  }
+  function placeBgPop() { placePop($("bgPop"), $("btnBg").getBoundingClientRect()); }
+
+  /* 背景弹层（v4.82）：开关 + 模糊 + 压暗 */
+  $("btnBg").addEventListener("click", function (ev) {
+    ev.stopPropagation();
+    if ($("bgPop").classList.toggle("show")) {
+      applyBg(true);
+      placeBgPop();
+    }
+  });
+  document.addEventListener("click", function (ev) {
+    const t = ev.target;
+    if (t.closest && (t.closest("#bgPop") || t.closest("#btnBg"))) return;
+    $("bgPop").classList.remove("show");
+  });
+  $("bgOn").addEventListener("click", function (ev) {
+    ev.stopPropagation();
+    bg.on = !bg.on;
+    applyBg(true);
+    scheduleBaseRefresh();
+  });
+  $("bgBlur").addEventListener("input", function () {
+    bg.blur = Math.max(0, Math.min(40, parseInt(this.value, 10) || 0));
+    applyBg(true);
+    scheduleBaseRefresh();
+  });
+  $("bgShade").addEventListener("input", function () {
+    bg.shade = Math.max(0, Math.min(0.85, (parseInt(this.value, 10) || 0) / 100));
+    applyBg(true);
+    scheduleBaseRefresh();
+  });
+  /* ---------------- v4.99：比例徽标 → 缩放按钮 ----------------
+     需求（2026-11-14 截图指「4:3 · 1440×1080」徽标）：「这个改为按钮状态，点开就是滑块，
+     滑动修改图片的放大和缩小」。zoom 只放大画面，取景焦点不变；1.0 = cover 基准。 */
+  if ($("sizeBadge") && $("zoomPop")) {
+    $("sizeBadge").addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      $("zoomPop").classList.toggle("hidden");
+      if ($("bgZoom")) syncRangeFill($("bgZoom"));
+    });
+    document.addEventListener("click", function (ev) {
+      if (!ev.target.closest || !ev.target.closest("#zoomPop, #sizeBadge")) {
+        $("zoomPop").classList.add("hidden");
+      }
+    });
+  }
+  if ($("bgZoom")) {
+    $("bgZoom").addEventListener("input", function () {
+      bg.zoom = Math.max(1, Math.min(3, Number(this.value) / 100));
+      $("zoomVal").textContent = bg.zoom.toFixed(2).replace(/0$/, "") + "×";
+      syncRangeFill(this);
+      applyBg(true);                       // zoom 写进 cfg.background
+      layoutPhoto();                       // 本地 CSS 即时生效（不用请求后端）
+    });
+  }
+  if ($("zoomReset")) {
+    $("zoomReset").addEventListener("click", function () {
+      bg.zoom = 1;
+      if ($("bgZoom")) { $("bgZoom").value = "100"; syncRangeFill($("bgZoom")); }
+      $("zoomVal").textContent = "1.0×";
+      applyBg(true);
+      layoutPhoto();
+    });
+  }
+
+  /* v4.98：取景的「居中」与「默认」（默认=水平居中、垂直偏上保人脸，与旧出图一致） */
+  if ($("bgFocusCenter")) {
+    $("bgFocusCenter").addEventListener("click", function () {
+      bg.focus = {x: 0.5, y: 0.5};
+      applyBg(true); layoutPhoto();
+    });
+  }
+  if ($("bgFocusReset")) {
+    $("bgFocusReset").addEventListener("click", function () {
+      bg.focus = {x: 0.5, y: 0.35};
+      applyBg(true); layoutPhoto();
+    });
+  }
+  $("bgDefault").addEventListener("click", function () {
+    bg = {on: true, blur: 22, shade: 0.47};
+    applyBg(true);
+    scheduleBaseRefresh();
+  });
+  $("bgRaw").addEventListener("click", function () {
+    /* 用原图 = 不模糊 + 不压暗（想只去模糊、保留压暗，把开关关掉即可） */
+    bg = {on: false, blur: bg.blur, shade: 0};
+    applyBg(true);
+    scheduleBaseRefresh();
+  });
+
+  /* emoji **下拉窗口**展开选择 */
+  function placeEmoPop() {
+    const btn = $("btnEmoji");
+    const pop = $("emoPop");
+    const r = btn.getBoundingClientRect();
+    const w = Math.min(320, window.innerWidth - 24);
+    pop.style.width = w + "px";
+    pop.style.left = Math.max(12, Math.min(window.innerWidth - w - 12,
+                                           r.right - w)) + "px";
+    const h = pop.offsetHeight || 300;
+    const below = window.innerHeight - r.bottom - 12;
+    pop.style.top = (below >= h ? r.bottom + 8 : Math.max(12, r.top - h - 8)) + "px";
+  }
+  $("btnEmoji").addEventListener("click", function (ev) {
+    ev.stopPropagation();
+    const open = $("emoPop").classList.toggle("show");
+    if (open) {
+      fillEmojiThumbs();
+      placeEmoPop();
+      try { $("emoSearch").focus({preventScroll: true}); } catch (e) { $("emoSearch").focus(); }
+    }
+  });
+  /* 面板一滚就收起：fixed 弹层不会跟着滚动，留着会"飘"在别的控件上 */
+  document.querySelector(".panel").addEventListener("scroll", function () {
+    $("emoPop").classList.remove("show");
+  });
+  window.addEventListener("resize", function () {
+    if ($("emoPop").classList.contains("show")) placeEmoPop();
+    if ($("bgPop").classList.contains("show")) placeBgPop();
+  });
+  /* 注意：断言要求保留 classList.toggle("show") 这一句（关闭路径在下面） */
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest || !ev.target.closest(".emowrap")) {
+      $("emoPop").classList.remove("show");
+    }
+  });
+  $("emoSearch").addEventListener("input", function () {
+    const kw = String(this.value || "").trim().toLowerCase();
+    $("emoGrid").querySelectorAll(".emoPick").forEach(function (b) {
+      const nm = String(b.dataset.name || "").toLowerCase();
+      const hit = !kw || nm.indexOf(kw) >= 0 || String(b.dataset.code || "").indexOf(kw) >= 0;
+      b.style.display = hit ? "" : "none";
+    });
+  });
+  $("emoPop").addEventListener("click", function (ev) {
+    const b = ev.target.closest && ev.target.closest(".emoPick");
+    if (!b) return;
+    const code = b.dataset.code || "";
+    if (!code || !cfg) return;
+    /* v4.86：**追加**一颗（用户：「emoji 可以添加重复的，如新增两个相同的 emoji」）。
+       以前是按 Set 重建整个数组 —— 同一个 code 加不了第二个，而且拖动过的位置会被抹掉。
+       新加的一颗错开摆放，避免完全重叠在上一颗身上。 */
+    cfg.emojis = cfg.emojis || [];
+    const n = cfg.emojis.length;
+    cfg.emojis.push({code: code,
+                     x: Math.min(0.62 + (n % 3) * 0.12, 0.80),
+                     y: Math.min(0.03 + Math.floor(n / 3) * 0.14, 0.70),
+                     size: 0.15});
+    selEmo = cfg.emojis.length - 1;
+    syncEmojiSelFromCfg();
+    renderEmojiChips();
+    paintEmoji();
+  });
+  $("emoChips").addEventListener("click", function (ev) {
+    /* × → 只删这一颗（按索引，不是按 code） */
+    const del = ev.target.closest && ev.target.closest("b[data-del]");
+    if (del) {
+      const i = parseInt(del.dataset.del, 10);
+      cfg.emojis = ((cfg.emojis) || []).filter(function (_, k) { return k !== i; });
+      if (selEmo === i) selEmo = -1;
+      else if (selEmo > i) selEmo -= 1;
+      syncEmojiSelFromCfg();
+      renderEmojiChips();
+      paintEmoji();
+      return;
+    }
+    /* 点 chip → 选中它（画布上出现虚线框，下方大小滑块跟着切到这一颗） */
+    const chip = ev.target.closest && ev.target.closest(".chip[data-i]");
+    if (!chip) return;
+    selEmo = parseInt(chip.dataset.i, 10);
+    renderEmojiChips();
+    paintEmoji();
+  });
+  /* ---------------- v4.94：选图片（与 emoji 同一套坐标/大小） ----------------
+     需求（2026-11-14）：「在 emoji 这个按钮位置新增一个选择图片的按钮，作用就是选择图片放到画布中，
+     要注意的是选择的这个图片操作的大小也是使用 emoji 的大小控制滑块的」。
+     实现：本地读文件 → canvas 压到最长边 512（PNG/WebP 保透明，其余转 JPEG）→
+     data URI 直接存进 cfg.emojis（type=image，与 emoji 同数组、同 x/y/size），
+     后端 `_paste_emoji(data=…)` 认这个字段画上去。不落额外文件、不用新接口。 */
+  function pickImageAsDataUri(file, maxSide) {
+    return new Promise(function (resolve, reject) {
+      if (!file) { reject(new Error("没有选文件")); return; }
+      if (!/^image\//.test(file.type || "")) { reject(new Error("不是图片文件")); return; }
+      const fr = new FileReader();
+      fr.onerror = function () { reject(new Error("读取文件失败")); };
+      fr.onload = function () {
+        const im = new Image();
+        im.onerror = function () { reject(new Error("图片解码失败")); };
+        im.onload = function () {
+          const w0 = im.naturalWidth || 1, h0 = im.naturalHeight || 1;
+          const k = Math.min(1, (maxSide || 512) / Math.max(w0, h0));
+          const w = Math.max(1, Math.round(w0 * k)), h = Math.max(1, Math.round(h0 * k));
+          const cv = document.createElement("canvas");
+          cv.width = w; cv.height = h;
+          cv.getContext("2d").drawImage(im, 0, 0, w, h);
+          const keepAlpha = /png|webp|svg/i.test(file.type || "");
+          try {
+            resolve(cv.toDataURL(keepAlpha ? "image/png" : "image/jpeg", 0.92));
+          } catch (e) {
+            reject(new Error("转换失败：" + (e.message || e)));
+          }
+        };
+        im.src = String(fr.result || "");
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+
+  $("btnEmoImg").addEventListener("click", function () {
+    if (!cfg) return;
+    $("emoImgFile").click();
+  });
+  $("emoImgFile").addEventListener("change", async function () {
+    const f = this.files && this.files[0];
+    this.value = "";                 // 复位：允许连续选同一个文件
+    if (!f || !cfg) return;
+    try {
+      const data = await pickImageAsDataUri(f, 512);
+      cfg.emojis = cfg.emojis || [];
+      const n = cfg.emojis.length;
+      cfg.emojis.push({type: "image", data: data,
+                       x: Math.min(0.30 + (n % 3) * 0.12, 0.80),
+                       y: Math.min(0.10 + Math.floor(n / 3) * 0.14, 0.70),
+                       size: 0.25});
+      selEmo = cfg.emojis.length - 1;
+      syncEmojiSelFromCfg();
+      renderEmojiChips();
+      paintEmoji();
+      setStatus("图片已放到画布：可拖动，大小用下面的 emoji 滑块调", "ok");
+    } catch (e) {
+      setStatus("加图片失败：" + (e.message || e), "err");
+    }
+  });
+
+  /* v4.86：拖滑块实时改**选中那一颗**的大小 */
+  $("emoSize").addEventListener("input", function () {
+    const e = ((cfg && cfg.emojis) || [])[selEmo];
+    if (!e) return;
+    const pct = Number(this.value) || 15;
+    e.size = Math.max(0.04, Math.min(0.60, pct / 100));
+    $("emoSizeVal").textContent = Math.round(e.size * 100) + "%";
+    paintEmoji();
+  });
+
+  /* v4.81：WebView2 **不支持 window.prompt**（点了没反应），改成行内输入框 */
+  $("btnSaveStyle").addEventListener("click", function () {
+    const all = loadMyStyles();
+    let name = ($("styleName").value || "").trim();
+    if (!name) name = "样式 " + (Object.keys(all).length + 1);
+    all[name] = JSON.parse(JSON.stringify((cfg && cfg.style) || {}));
+    try { localStorage.setItem(MYSTYLE_KEY, JSON.stringify(all)); } catch (e) { /* 隐私模式 */ }
+    $("myStyleMsg").textContent = "已存：" + name;
+    $("styleName").value = "";
+    renderMyStyles();
+  });
+  $("myStyleSel").addEventListener("change", function () {
+    if (!this.value) return;
+    const st = loadMyStyles()[this.value];
+    if (!st) return;
+    cfg.style = JSON.parse(JSON.stringify(st));
+    syncControls(); paintText();
+    $("myStyleMsg").textContent = "已套用：" + this.value;
+  });
+
+  $("btnGen").addEventListener("click", async function () {
+    const btn = this;
+    stashEmojis();                 // v4.89：当前比例这套写回 emojisByRatio
+    /* v5.2：提交 copy.lines（每条一行）；line1/line2/text 仍写一份，供老读法与其它模块兼容 */
+    const rowsGen = copyLines().map(function (v) { return String(v || "").trim(); }).filter(Boolean);
+    if (!rowsGen.length) { setStatus("先填文案（至少一行）", "warn"); return; }
+    cfg.copy = cfg.copy || {};
+    cfg.copy.lines = rowsGen;
+    cfg.copy.line1 = rowsGen[0];
+    cfg.copy.line2 = rowsGen.slice(1).join("\n");
+    cfg.copy.text = rowsGen.join("");
+    delete cfg.copy.twoLine;
+    btn.disabled = true;
+    setStatus("保存并重渲染四档中…", "warn");
+    try {
+      const r = await slicer("POST", "/api/edits/cover/design", { name: FILM, config: cfg });
+      if (r.status !== 200 || !(r.data && r.data.ok)) {
+        setStatus("保存失败：" + ((r.data && r.data.error) || r.status), "err");
+        return;
+      }
+      covers = (r.data || {}).covers || [];
+      applyRatio();
+      setStatus("✓ 已生成四档封面（" + (r.data.generated ? "本次重渲染" : "复用") + "）", "ok");
+    } catch (e) {
+      setStatus("保存失败：" + (e.message || e), "err");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  /* v4.87：无边框窗口拖动 —— 顶栏按住拖（用户要的是把系统标题栏去掉，
+     去掉后必须自己给一个拖动手势）。
+     说明：不用 pywebview 的 easy_drag —— 它会把画布里文字/emoji 的拖动一起抢走；
+     这里只认顶栏，排除按钮/比例药丸/输入控件，增量经 rAF 节流后交给桥的 Window.move。 */
+  (function bindWindowDrag() {
+    const top = document.querySelector("header.top");
+    if (!top) return;
+    let last = null, acc = null, raf = 0;
+    function flush() {
+      raf = 0;
+      const d = acc;
+      acc = null;
+      if (!d || (!d.dx && !d.dy)) return;
+      const api = getBridge();
+      if (api && api.designer_move_window) {
+        try { api.designer_move_window(d.dx, d.dy); } catch (e) { /* 拖动失败不影响其它 */ }
+      }
+    }
+    top.addEventListener("mousedown", function (ev) {
+      if (ev.button !== 0) return;
+      if (ev.target.closest && ev.target.closest("button, input, select, a, .ratiobar")) return;
+      last = {x: ev.screenX, y: ev.screenY};
+      top.classList.add("dragging");
+      ev.preventDefault();
+    });
+    window.addEventListener("mousemove", function (ev) {
+      if (!last) return;
+      const dx = ev.screenX - last.x, dy = ev.screenY - last.y;
+      if (!dx && !dy) return;
+      last = {x: ev.screenX, y: ev.screenY};
+      acc = acc || {dx: 0, dy: 0};
+      acc.dx += dx;
+      acc.dy += dy;
+      if (!raf) raf = requestAnimationFrame(flush);
+    });
+    window.addEventListener("mouseup", function () {
+      if (!last) return;
+      last = null;
+      top.classList.remove("dragging");
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      flush();
+    });
+  })();
+
+  async function closeWindow() {
+    const api = getBridge();
+    if (api && api.close_cover_designer) {
+      try { await api.close_cover_designer(); return; } catch (e) { /* 兜底 */ }
+    }
+    window.close();
+  }
+  $("btnCancel").addEventListener("click", closeWindow);
+  $("btnClose").addEventListener("click", closeWindow);
+
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape") {
+      if ($("bgPop").classList.contains("show")) { $("bgPop").classList.remove("show"); return; }
+      if ($("emoPop").classList.contains("show")) { $("emoPop").classList.remove("show"); return; }
+      closeWindow();
+      return;
+    }
+    if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") { $("btnGen").click(); }
+  });
+
+  window.addEventListener("resize", fitCanvas);
+
+  /* ---------------- 启动 ---------------- */
+  async function boot() {
+    /* v5.2：demo 模式（无桥环境预览/截图）不需要桥，直接渲染 */
+    if (/[?&]demo=1/.test(location.search)) { await loadDesign(); return; }
+    const api = getBridge();
+    if (!api) { setTimeout(boot, 200); return; }
+    try {
+      const t = await api.cover_designer_target();
+      if (t && t.ok && t.film) FILM = t.film;
+    } catch (e) { /* fallback */ }
+    if (!FILM) {
+      setStatus("拿不到成片名 —— 请回主窗口成片行重新点「封面图」", "err");
+      $("hint").innerHTML = "<span>没有成片信息，无法预览底图</span>";
+      return;
+    }
+    /* FILM 可能是带前缀的相对路径 —— 顶栏只显示文件名那一段更好认 */
+    $("filmName").textContent = String(FILM).split("/").filter(Boolean)
+      .filter(function (x) { return x !== "edits"; })
+      .slice(-2).join(" / ");
+    $("filmName").title = FILM;
+    document.title = "封面设计 · " + FILM;
+    $("hint").style.display = "flex";
+    loadDesign();
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

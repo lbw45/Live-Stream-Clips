@@ -1,0 +1,24 @@
+# Live Stream Clips - Python dependencies
+# Install:  python -m pip install -r requirements.txt
+# Python:   3.10 - 3.12 recommended (64-bit)
+#
+# Core (required by the two local services and the desktop window)
+pywebview>=5.0
+fastapi>=0.110
+uvicorn[standard]>=0.27
+httpx>=0.27
+Pillow>=10.0
+numpy>=1.24
+playwright>=1.40
+
+# Speech-to-text (downloads its Whisper model on first use)
+faster-whisper>=1.0.0
+
+# CapCut/JianYing draft export (API is version-locked, keep pinned)
+pyJianYingDraft==0.3.0
+
+# ---- Optional ------------------------------------------------------------
+# Subtitle OCR verification for slice boundaries. When absent the pipeline
+# simply skips OCR double-checking. Install with:
+#   python -m pip install rapidocr-onnxruntime
+# rapidocr-onnxruntime>=1.3

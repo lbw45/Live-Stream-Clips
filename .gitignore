@@ -1,0 +1,113 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- 运行时 / 工作区数据（绝不入库） ----
+runtime_data/
+workspace/
+runtime/
+bin/
+models/
+depthlib/
+ocrlib/
+cuda12/
+tmp/
+cache/
+logs/
+
+# ---- 业务素材（用户数据与版权内容） ----
+live_raw/
+clips/
+edits/
+exports/
+downloads/
+uploads/
+music/
+backgrounds/
+records/
+board/
+publisher_data/
+depth_video/
+lyric_video/
+
+# ---- 凭证与配置（含登录态、API Key，绝不入库） ----
+cookies/
+cookie_backup/
+*.cookies.txt
+cookiefile*.txt
+settings.json
+local-service-ports.json
+*.db
+*.sqlite
+*.sqlite3
+webview_data/
+profile/
+Local State
+Login Data
+History
+
+# ---- 音视频与模型文件 ----
+*.mp4
+*.mov
+*.mkv
+*.flv
+*.ts
+*.webm
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.flac
+*.jpg
+*.jpeg
+*.png
+*.webp
+!.readme/*.png
+*.onnx
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+
+# 例外：程序内置的界面素材与字体要进仓库
+!app/common/assets/**/*.png
+!app/common/assets/**/*.jpg
+!launcher/ui/assets/**/*.png
+!launcher/ui/assets/**/*.ico
+!app/common/assets/fonts/**/*.otf
+!app/common/assets/fonts/**/*.ttf
+
+# ---- 可执行文件与打包产物 ----
+*.exe
+*.dll
+*.pyd
+*.msi
+dist/
+launcher/_internal/
+launcher/LiveStreamClips.exe
+build/*.exe
+
+# ---- 内部文档（不该出现在开源仓库） ----
+PROJECT-DOC*
+MEMORY*
+00-*
+*.record.json
+docs/internal/
+.workbuddy/
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+Desktop.ini
+.DS_Store
