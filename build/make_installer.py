@@ -48,8 +48,27 @@ def dir_size_mb(p):
                for dp, _, fs in os.walk(p) for f in fs) / 1024 / 1024
 
 
+BUILD_LOCK = os.path.join(ROOT, "build", ".build.lock")
+
+
+def _acquire() -> bool:
+    """只允许一个构建在跑：两个 makensis 同时读 staging 会产出 CRC 坏的安装包。"""
+    if os.path.isfile(BUILD_LOCK):
+        try:
+            age = time.time() - os.path.getmtime(BUILD_LOCK)
+        except OSError:
+            age = 0
+        if age < 3600:
+            print("FATAL: 已有构建在跑（build/.build.lock，%.0f 分钟前），等它结束或删掉锁文件" % (age / 60))
+            return False
+    open(BUILD_LOCK, "w").write(str(os.getpid()))
+    return True
+
+
 def main():
     t0 = time.time()
+    if not _acquire():
+        return 2
     no_rt = "--no-rt" in sys.argv
 
     # ---- find makensis ----
@@ -107,6 +126,10 @@ def main():
         return 1
     print(f"[4/4] OK  {out}")
     print(f"      {os.path.getsize(out)/1024/1024:.1f} MB, total {time.time()-t0:.0f}s")
+    try:
+        os.remove(BUILD_LOCK)
+    except OSError:
+        pass
     return 0
 
 
