@@ -111,3 +111,8 @@ docs/internal/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# installer build artifacts
+build/staging/
+build/*.exe
+build/makensis.log

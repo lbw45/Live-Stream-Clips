@@ -31,6 +31,7 @@ from app.slicer.douyin import RID_SEGMENT as _RID_SEG
 from app.slicer.recorder_manager import RecorderManager
 from app.slicer.recheck import ReanalyzeManager
 from app.slicer.transcriber import TranscriberManager
+from app.slicer import transcriber as transcriber_mod  # 模块级函数（模型下载）
 from app.slicer.renderer import RenderManager
 from app.slicer.auto_pipeline import AutoPipeline
 from app.slicer import tuning as tuning_engine
@@ -141,12 +142,12 @@ def h_transcribe_status(_handler, params):
 def h_model_dl_start(handler, _params) -> tuple[int, dict]:
     """一键下载 Whisper 模型（后台线程；开源版 2026-11-19）。"""
     body = handler._read_json_body()
-    return 200, TRANSCRIBER.start_model_download(str(body.get("name") or "small"))
+    return 200, transcriber_mod.start_model_download(str(body.get("name") or "small"))
 
 
 @route("GET", "/api/models/whisper/download")
 def h_model_dl_state(_handler, _params) -> tuple[int, dict]:
-    return 200, TRANSCRIBER.model_download_state()
+    return 200, transcriber_mod.model_download_state()
 
 
 @route("POST", "/api/transcribe/cancel")

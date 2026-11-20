@@ -43,6 +43,7 @@ from app.common.runtime_probe import (  # noqa: E402
 )
 
 UI_INDEX = asset_root() / "launcher" / "ui" / "index.html"
+ICON_PATH = asset_root() / "launcher" / "ui" / "assets" / "app.ico"
 
 # 前端可以按**逻辑名**打开工作区子目录（名字 → Workspace 属性名）。
 # 存在的意义：转写产物住在 runtime_data\slicer\transcripts，前端不该硬编码这个路径链。
@@ -678,6 +679,8 @@ def main() -> int:
                       debug=bool(os.environ.get("YJ_DEBUG")),
                       storage_path=str(ws.webview_data),
                       private_mode=False,
+                      # 开源版：任务栏/窗口用应用图标（pywebview 在 Windows 只认 .ico）
+                      icon=str(ICON_PATH) if ICON_PATH.is_file() else None,
         )
     except Exception as exc:
         print(f"[ERROR] 窗口启动失败：{exc}", file=sys.stderr)

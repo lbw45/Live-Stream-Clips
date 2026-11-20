@@ -606,7 +606,7 @@ STOP_EXIT_WAIT_SEC = 8.0
 HOUR_TOLERANCE = 0.98
 # A6：磁盘告警线（v4.74 P-B 起**缺省值**，实际阈值可在设置页配：
 #     recordMinFreeGb / recordMinFreePct —— 双条件任一触发即停）
-LOW_DISK_GB = 50.0
+LOW_DISK_GB = 10.0   # 开源版：50GB 对普通机器太苛刻（虚拟机 34GB 直接录不了）
 LOW_DISK_PCT = 5.0
 
 

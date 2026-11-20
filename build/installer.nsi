@@ -28,6 +28,10 @@ SetCompressor /SOLID lzma
 SetCompressorDictSize 64
 
 !define MUI_ABORTWARNING
+!define MUI_ICON   "staging\launcher\ui\assets\app.ico"
+!define MUI_UNICON "staging\launcher\ui\assets\app.ico"
+Icon    "staging\launcher\ui\assets\app.ico"
+UninstallIcon "staging\launcher\ui\assets\app.ico"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\launcher\.runtime\start.bat"
 !define MUI_FINISHPAGE_RUN_TEXT "Start ${APPNAME} now"
 !insertmacro MUI_PAGE_WELCOME
