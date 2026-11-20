@@ -112,10 +112,10 @@ Section "FFmpeg（可选：一键下载，渲染与转写必需，约 90MB）" S
     ${If} ${FileExists} "$INSTDIR\workspace\bin\ffmpeg.exe"
       DetailPrint "FFmpeg 已就绪。"
     ${Else}
-      DetailPrint "FFmpeg 解压失败 —— 请手动把 ffmpeg.exe / ffprobe.exe 放进 workspace\bin。"
+      DetailPrint "FFmpeg 解压失败 —— 应用内「设置 → 显卡与加速」点「下载 FFmpeg」可自动补齐。"
     ${EndIf}
   ${Else}
-    DetailPrint "FFmpeg 下载失败（$0）—— 可稍后手动下载放进 workspace\bin。"
+    DetailPrint "FFmpeg 下载失败（$0）—— 安装完成后可在应用「设置 → 显卡与加速」点「下载 FFmpeg」补齐。"
   ${EndIf}
   Delete "$TEMP\lsc_ff\ffmpeg.zip"
 ff_done:

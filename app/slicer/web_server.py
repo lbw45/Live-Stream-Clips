@@ -46,7 +46,8 @@ from app.slicer.llm import decode_api_key, load_config as load_llm_config
 from app.slicer.llm import test_connection as test_llm_connection
 from app.slicer.llm import list_models as llm_list_models
 from app.slicer.llm import providers_view as llm_providers_view
-from app.slicer import gpu as gpu_engine        # v3.81：显卡体检 / 实测 / CUDA 修复
+from app.slicer import gpu as gpu_engine
+from app.slicer import ffmpeg_setup        # v3.81：显卡体检 / 实测 / CUDA 修复
 # v4.6（）：看板的**自动采集**（浏览器通道取数 → 生成看板能读的快照）
 
 SERVICE = "slicer"
@@ -398,6 +399,13 @@ def h_recorders_status(_handler, _params, rid: str):
 
 @pattern_route("POST", "^/api/recorders/(" + _RID_SEG + ")/start$")
 def h_recorders_start(_handler, _params, rid: str):
+    # 开源版 2026-11-20：FFmpeg 是录制的硬依赖，缺了直接给可执行的指引，
+    # 不要等 ffmpeg 进程起不来再报「退出码」那种看不懂的错。
+    if not ws.ffmpeg.is_file():
+        return 400, {"ok": False,
+                     "error": "缺少 FFmpeg（workspace\\bin\\ffmpeg.exe）。"
+                              "打开「设置 → 显卡与加速」点「下载 FFmpeg」即可自动补齐。",
+                     "needFfmpeg": True}
     return MANAGER.start_recording(rid)
 
 
@@ -1693,6 +1701,19 @@ def h_gpu_selftest_start(_handler, _params) -> tuple[int, dict]:
 @route("GET", "/api/system/gpu/selftest")
 def h_gpu_selftest_state(_handler, _params) -> tuple[int, dict]:
     return 200, gpu_engine.selftest_state()
+
+
+@route("GET", "/api/system/ffmpeg")
+def h_ffmpeg_state(_handler, _params) -> tuple[int, dict]:
+    """FFmpeg 状态（缺文件时前端给出「下载 FFmpeg」按钮）。"""
+    return 200, ffmpeg_setup.state()
+
+
+@route("POST", "/api/system/ffmpeg/download")
+def h_ffmpeg_download(handler, _params) -> tuple[int, dict]:
+    """一键下载 FFmpeg（后台线程，状态结构与 CUDA 修复一致）。"""
+    handler._read_json_body()
+    return 200, ffmpeg_setup.start_download()
 
 
 @route("POST", "/api/system/cuda/repair")

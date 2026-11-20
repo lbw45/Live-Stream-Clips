@@ -3502,6 +3502,12 @@ document.addEventListener("click", function (ev) {
             <button class="small primary" id="btnModelDl">下载 Whisper 模型</button>
             <span class="libdesc" id="modelDlState"></span>
           </div>
+          <div class="cfgrow" id="ffmpegRow">
+            <span class="cfglab">FFmpeg</span>
+            <span class="libdesc" id="ffmpegHint">正在检测…</span>
+            <button class="small primary hidden" id="btnFfmpegDl">下载 FFmpeg</button>
+            <span class="libdesc" id="ffmpegState"></span>
+          </div>
           <div id="gpuLog" class="libdesc"></div>
           <div class="libdesc">说明<span class="helpq" tabindex="0" role="note" data-tip="「<b>检测</b>」只看条件齐不齐：显卡型号、驱动、显存、便携 CUDA 运行时缺不缺。<b>「实测一次」才动手</b>：真编一段视频（NVENC）＋真加载一次 Whisper GPU 模型，所以它会占十几秒显存——别在正在转写/渲染时点。GPU 都用不了也不影响出片，只是转写会退回 CPU。<br><b>关于「下载 CUDA 组件」</b>：工作区这套是<b>便携 DLL</b>（本机的 runtime\cuda12 目录），不是在系统里装 CUDA Toolkit；所以缺文件时这里下的是对应的 nvidia wheel 并把 DLL 解进去——几百 MB、不动系统、不需要管理员权限，版本号优先按本机 whisper 依赖声明反推；声明读不到时用兼容默认版本（CUDA 12.x 系列，驱动支持 CUDA 12 以上才能装）。">?</span></div>
         </div>
@@ -11252,6 +11258,44 @@ $("btnModelDl").addEventListener("click", async function () {
     return;
   }
   pollGpuTask("/api/models/whisper/download", "Whisper 模型下载");
+});
+
+/* FFmpeg 状态：缺文件就把「下载 FFmpeg」按钮放出来（录制/转写/渲染的硬依赖） */
+async function loadFfmpeg() {
+  const r = await slicer("GET", "/api/system/ffmpeg");
+  if (r.status !== 200) return;
+  const d = r.data || {};
+  const btn = $("btnFfmpegDl");
+  if (d.present) {
+    $("ffmpegHint").innerHTML = "已就绪：" + esc((d.version || "").slice(0, 60)) +
+      "（" + d.sizeMb + " MB）";
+    btn.classList.add("hidden");
+  } else {
+    $("ffmpegHint").innerHTML = "**未安装** —— 录制、转写、渲染都需要它；点右边按钮自动下载（约 90 MB）";
+    $("ffmpegHint").style.color = "#f87171";
+    btn.classList.remove("hidden");
+  }
+}
+loadFfmpeg();
+
+$("btnFfmpegDl").addEventListener("click", async function () {
+  const btn = $("btnFfmpegDl");
+  btn.disabled = true;
+  $("ffmpegState").textContent = "正在下载…";
+  const r = await slicer("POST", "/api/system/ffmpeg/download");
+  if (r.status !== 200) {
+    $("ffmpegState").textContent = "启动失败";
+    btn.disabled = false;
+    return;
+  }
+  if (r.data && r.data.alreadyPresent) {
+    $("ffmpegState").textContent = "已经有 FFmpeg 了";
+    btn.disabled = false;
+    loadFfmpeg();
+    return;
+  }
+  pollGpuTask("/api/system/ffmpeg", "FFmpeg 下载");
+  btn.disabled = false;
 });
 });
 
