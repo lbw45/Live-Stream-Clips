@@ -43,6 +43,7 @@ UninstallIcon "staging\launcher\ui\assets\app.ico"
 !insertmacro MUI_UNPAGE_COMPONENTS
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
+!define MUI_UNFINISHPAGE_NOAUTOCLOSE
 !insertmacro MUI_LANGUAGE "SimpChinese"
 
 ; ============================================================
@@ -178,6 +179,10 @@ Section "un.停止后台服务" un.stop
     Pop $0
   ${EndIf}
   Sleep 1500
+  ; 安装器释放出来的文件带只读属性，RMDir /r 遇到只读会**静默跳过**（用户实测残留 7000+ 文件）。
+  ; 卸载前先把整棵树的只读清掉。
+  DetailPrint "清除只读属性 …"
+  nsExec::ExecToLog 'attrib -R "$INSTDIR\*.*" /S /D' 
 SectionEnd
 
 Section "un.程序文件" un.app
@@ -185,6 +190,12 @@ Section "un.程序文件" un.app
   Delete "$DESKTOP\${APPNAME}.lnk"
   RMDir /r "$SMPROGRAMS\${APPNAME}"
   RMDir /r "$INSTDIR\app"
+  ; 旧版安装器（v1.0.1 早几个构建）曾把 app 内容解到安装根 —— 这里兜底清掉，
+  ; 否则卸载后残留 common/ editor/ slicer/ 一大堆（用户实测 19~53MB）。
+  Delete "$INSTDIR\__init__.py"
+  RMDir /r "$INSTDIR\common"
+  RMDir /r "$INSTDIR\editor"
+  RMDir /r "$INSTDIR\slicer"
   RMDir /r "$INSTDIR\launcher"
   Delete "$INSTDIR\README.md"
   Delete "$INSTDIR\LICENSE"
@@ -219,7 +230,10 @@ SectionEnd
 
 Section "un.卸载程序自身" un.self
   SectionIn RO
-  Delete "$INSTDIR\${UNINST_EXE}"
+  ; 运行临时区：日志 / 端口文件 / 下载缓存 —— 不属于用户数据，直接清
+  RMDir /r "$INSTDIR\workspace\runtime_data"
+  ; 卸载器正在运行，删不掉自己 —— 标记重启后删除
+  Delete /REBOOTOK "$INSTDIR\${UNINST_EXE}"
   RMDir "$INSTDIR\workspace"
   RMDir "$INSTDIR"
 SectionEnd
