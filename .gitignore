@@ -83,6 +83,8 @@ History
 !app/common/assets/**/*.jpg
 !launcher/ui/assets/**/*.png
 !launcher/ui/assets/**/*.ico
+!docs/*.png
+!docs/*.jpg
 !app/common/assets/fonts/**/*.otf
 !app/common/assets/fonts/**/*.ttf
 
