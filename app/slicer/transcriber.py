@@ -549,7 +549,17 @@ def model_download_state() -> dict:
         snap["log"] = list(_model_dl["log"])
         snap["elapsedSec"] = (round(time.time() - _model_dl["startedAt"], 1)
                               if _model_dl["startedAt"] else 0)
-        return snap
+        name = _model_dl.get("name") or "small"
+    # 进度：hf 是逐文件落盘的，用目录体积近似（前端除以 expectedMb 画进度条）
+    d = ws.models_dir / name
+    try:
+        size = sum(f.stat().st_size for f in d.rglob("*") if f.is_file()) if d.is_dir() else 0
+    except OSError:
+        size = 0
+    snap["dirSizeMb"] = round(size / 1024 / 1024, 1)
+    snap["expectedMb"] = {"tiny": 75, "base": 145, "small": 460,
+                          "medium": 1500, "large-v3": 3100}.get(name, 460)
+    return snap
 
 
 def start_model_download(name: str = "small") -> dict:

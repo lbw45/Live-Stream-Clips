@@ -3497,16 +3497,20 @@ document.addEventListener("click", function (ev) {
             <span class="libdesc" id="gpuRepairHint"></span>
             <button class="small primary" id="btnGpuRepair">下载缺失的 CUDA 组件</button>
           </div>
-          <div class="addrow hidden" id="modelDlRow">
+          <div class="addrow hidden" id="modelDlRow" style="flex-wrap:wrap">
             <span class="libdesc" id="modelDlHint"></span>
             <button class="small primary" id="btnModelDl">下载 Whisper 模型</button>
             <span class="libdesc" id="modelDlState"></span>
+            <div class="bar hidden" id="modelProg" style="width:100%;margin-top:6px">
+              <i style="width:0%"></i></div>
           </div>
-          <div class="cfgrow" id="ffmpegRow">
+          <div class="cfgrow" id="ffmpegRow" style="flex-wrap:wrap">
             <span class="cfglab">FFmpeg</span>
             <span class="libdesc" id="ffmpegHint">正在检测…</span>
             <button class="small primary hidden" id="btnFfmpegDl">下载 FFmpeg</button>
             <span class="libdesc" id="ffmpegState"></span>
+            <div class="bar hidden" id="ffmpegProg" style="width:100%;margin-top:6px">
+              <i style="width:0%"></i></div>
           </div>
           <div id="gpuLog" class="libdesc"></div>
           <div class="libdesc">说明<span class="helpq" tabindex="0" role="note" data-tip="「<b>检测</b>」只看条件齐不齐：显卡型号、驱动、显存、便携 CUDA 运行时缺不缺。<b>「实测一次」才动手</b>：真编一段视频（NVENC）＋真加载一次 Whisper GPU 模型，所以它会占十几秒显存——别在正在转写/渲染时点。GPU 都用不了也不影响出片，只是转写会退回 CPU。<br><b>关于「下载 CUDA 组件」</b>：工作区这套是<b>便携 DLL</b>（本机的 runtime\cuda12 目录），不是在系统里装 CUDA Toolkit；所以缺文件时这里下的是对应的 nvidia wheel 并把 DLL 解进去——几百 MB、不动系统、不需要管理员权限，版本号优先按本机 whisper 依赖声明反推；声明读不到时用兼容默认版本（CUDA 12.x 系列，驱动支持 CUDA 12 以上才能装）。">?</span></div>
@@ -11137,6 +11141,15 @@ function renderGpu(d) {
     });
   })();
 
+  /* Whisper 模型行：缺模型就显示（无独显也要显示 —— 转写跑 CPU 同样需要模型） */
+  const mp = d.whisper && d.whisper.modelPresent;
+  $("modelDlRow").classList.toggle("hidden", !!mp);
+  if (!mp) {
+    $("modelDlHint").innerHTML = "Whisper 模型还没下载（转写必需，small 约 460 MB，走 hf-mirror 镜像）。" +
+    "　<span class=\"helpq\" tabindex=\"0\" role=\"note\" data-tip=\"Whisper 是<b>语音识别</b>模型：转写（听出说了什么）靠它，没有它整条流水线停在转写一步。<br>下载一次后离线可用，存在工作区 models/small 目录；想换更准或更快的档位，改环境变量 SLICE_WHISPER_MODEL_NAME 后重新点下载。\">?</span>";
+  }
+
+
   const g0 = (d.gpus || [])[0] || null;
   if (!d.hasGpu || !g0) {
     $("gpuInfo").innerHTML = "没检测到 NVIDIA 显卡（转写与渲染会走 CPU，功能不受影响）。" +
@@ -11172,12 +11185,6 @@ function renderGpu(d) {
   $("gpuState").textContent = okRuntime ? "就绪" : "缺组件";
   $("gpuState").className = "count " + (okRuntime ? "ok" : "warn");
 
-  const mp = d.whisper && d.whisper.modelPresent;
-  $("modelDlRow").classList.toggle("hidden", !!mp);
-  if (!mp) {
-    $("modelDlHint").innerHTML = "Whisper 模型还没下载（转写必需，small 约 460 MB，走 hf-mirror 镜像）。" +
-    "　<span class=\"helpq\" tabindex=\"0\" role=\"note\" data-tip=\"Whisper 是<b>语音识别</b>模型：转写（听出说了什么）靠它，没有它整条流水线停在转写一步。<br>下载一次后离线可用，存在工作区 models/small 目录；想换更准或更快的档位，改环境变量 SLICE_WHISPER_MODEL_NAME 后重新点下载。\">?</span>";
-  }
 
   const rep = d.repair || {};
   const row = $("gpuRepairRow");
@@ -11239,6 +11246,33 @@ function pollGpuTask(statePath, doneText) {
   tick();
 }
 
+  /* 通用下载进度轮询：state 里拿 downloadedMb / dirSizeMb，除以总量画进度条 */
+  function pollDlProgress(statePath, barId, textEl, totalMb, doneText) {
+    const bar = $(barId);
+    bar.classList.remove("hidden");
+    const fill = bar.querySelector("i");
+    async function tick() {
+      const r = await slicer("GET", statePath);
+      if (r.status === 0) { setTimeout(tick, 2500); return; }
+      const s = r.data || {};
+      const got = Number(s.downloadedMb || s.dirSizeMb || 0);
+      const pct = Math.max(2, Math.min(99, Math.round(got / (totalMb || 100) * 100)));
+      fill.style.width = pct + "%";
+      if (textEl) $(textEl).textContent = "已下载 " + got + " MB / 约 " + totalMb + " MB（" + pct + "%）";
+      if (s.running) { setTimeout(tick, 1500); return; }
+      if (s.ok) {
+        fill.style.width = "100%";
+        if (textEl) $(textEl).textContent = doneText + "完成";
+        setTimeout(function () { bar.classList.add("hidden"); }, 2500);
+        loadGpu();
+      } else {
+        if (textEl) $(textEl).textContent = "失败：" + (s.error || "看日志");
+        fill.style.background = "#f87171";
+      }
+    }
+    tick();
+  }
+
   $("btnFfmpegDl").onclick = async function () {
     const btn = $("btnFfmpegDl");
     btn.disabled = true;
@@ -11251,7 +11285,7 @@ function pollGpuTask(statePath, doneText) {
       loadGpu();
       return;
     }
-    pollGpuTask("/api/system/ffmpeg", "FFmpeg 下载");
+    pollDlProgress("/api/system/ffmpeg", "ffmpegProg", "ffmpegState", 120, "FFmpeg 下载");
     btn.disabled = false;
   };
 
@@ -11293,7 +11327,7 @@ $("btnModelDl").addEventListener("click", async function () {
     loadGpu();
     return;
   }
-  pollGpuTask("/api/models/whisper/download", "Whisper 模型下载");
+  pollDlProgress("/api/models/whisper/download", "modelProg", "modelDlState", 460, "Whisper 模型下载");
 });
 
 

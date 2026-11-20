@@ -121,6 +121,34 @@ Section "FFmpeg（可选：一键下载，渲染与转写必需，约 90MB）" S
 ff_done:
 SectionEnd
 
+; ---- [3b] Whisper model (optional download, ~460MB, skipped if present) ----
+Section "Whisper 语音模型（可选：一键下载，约 460 MB）" SEC_MODEL
+  ${If} ${FileExists} "$INSTDIR\workspace\models\small\model.bin"
+    DetailPrint "已有 Whisper 模型，跳过下载。"
+    GoTo model_done
+  ${EndIf}
+  CreateDirectory "$INSTDIR\workspace\models\small"
+  DetailPrint "下载 Whisper small 模型（hf-mirror 镜像，约 460 MB）…"
+  NSISdl::download /TIMEOUT=120000 "https://hf-mirror.com/Systran/faster-whisper-small/resolve/main/model.bin" "$INSTDIR\workspace\models\small\model.bin"
+  Pop $0
+  ${If} $0 != "success"
+    DetailPrint "model.bin 下载失败（$0）—— 安装完成后可在应用「设置 → 显卡与加速」点「下载 Whisper 模型」。"
+    GoTo model_done
+  ${EndIf}
+  NSISdl::download /TIMEOUT=30000 "https://hf-mirror.com/Systran/faster-whisper-small/resolve/main/config.json" "$INSTDIR\workspace\models\small\config.json"
+  Pop $0
+  NSISdl::download /TIMEOUT=30000 "https://hf-mirror.com/Systran/faster-whisper-small/resolve/main/tokenizer.json" "$INSTDIR\workspace\models\small\tokenizer.json"
+  Pop $0
+  NSISdl::download /TIMEOUT=30000 "https://hf-mirror.com/Systran/faster-whisper-small/resolve/main/vocabulary.txt" "$INSTDIR\workspace\models\small\vocabulary.txt"
+  Pop $0
+  ${If} ${FileExists} "$INSTDIR\workspace\models\small\model.bin"
+    DetailPrint "Whisper 模型已就绪。"
+  ${Else}
+    DetailPrint "Whisper 模型未下全 —— 可在应用内「设置 → 显卡与加速」补齐。"
+  ${EndIf}
+model_done:
+SectionEnd
+
 ; ---- [4] Desktop / start-menu shortcuts ----
 Section "桌面与开始菜单快捷方式" SEC_SHORTCUT
   CreateShortCut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\launcher\.runtime\start.bat" "" "$INSTDIR\launcher\ui\assets\app.ico"
