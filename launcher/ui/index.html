@@ -11338,6 +11338,79 @@ $("btnModelDl").addEventListener("click", async function () {
 
 });
 
+/* ==================== v1.0.2 顶层重新接线（bug 修复）====================
+   上面两个区块里的「下载 FFmpeg / 下载 Whisper 模型」绑定被误包在
+   $("btnGpuRepair").addEventListener 的回调内部 —— 只有点「修复」才会执行，
+   用户直接点下载按钮**毫无反应**（虚拟机实测）。这里在顶层用 onclick 重新接线，
+   pollDlProgress 也在这层重新定义一份（块内那份是局部的，拿不到）。
+   onclick 赋值天然幂等，不会覆盖成两份实现。 */
+function pollDlProgressTop(statePath, barId, textEl, totalMb, doneText) {
+  const bar = $(barId);
+  if (!bar) return;
+  bar.classList.remove("hidden");
+  const fill = bar.querySelector("i");
+  async function tick() {
+    const r = await slicer("GET", statePath);
+    if (!r || r.status === 0) { setTimeout(tick, 2500); return; }
+    const d = r.data || {};
+    const got = Number(d.downloadedMb || d.dirSizeMb || 0);
+    const pct = Math.max(2, Math.min(99, Math.round(got / (totalMb || 100) * 100)));
+    fill.style.width = pct + "%";
+    if (textEl) $(textEl).textContent = "已下载 " + got + " MB / 约 " + totalMb + " MB（" + pct + "%）";
+    if (d.running) { setTimeout(tick, 1500); return; }
+    if (d.ok) {
+      fill.style.width = "100%";
+      if (textEl) $(textEl).textContent = doneText + "完成";
+      setTimeout(function () { bar.classList.add("hidden"); }, 2500);
+      loadGpu();
+    } else {
+      if (textEl) $(textEl).textContent = "失败：" + (d.error || "看日志");
+      fill.style.background = "#f87171";
+    }
+  }
+  tick();
+}
+
+$("btnFfmpegDl").onclick = async function () {
+  const btn = $("btnFfmpegDl");
+  btn.disabled = true;
+  $("ffmpegState").textContent = "正在启动下载…";
+  const r = await slicer("POST", "/api/system/ffmpeg/download");
+  if (r.status !== 200) {
+    $("ffmpegState").textContent = "启动失败：" + ((r.data && r.data.error) || r.status);
+    btn.disabled = false;
+    return;
+  }
+  if (r.data && r.data.alreadyPresent) {
+    $("ffmpegState").textContent = "已经有 FFmpeg 了";
+    btn.disabled = false;
+    loadGpu();
+    return;
+  }
+  pollDlProgressTop("/api/system/ffmpeg", "ffmpegProg", "ffmpegState", 120, "FFmpeg 下载");
+  btn.disabled = false;
+};
+
+$("btnModelDl").onclick = async function () {
+  const btn = $("btnModelDl");
+  btn.disabled = true;
+  $("modelDlState").textContent = "正在启动下载…";
+  const r = await slicer("POST", "/api/models/whisper/download", { name: "small" });
+  if (r.status !== 200) {
+    $("modelDlState").textContent = "启动失败：" + ((r.data && r.data.error) || r.status);
+    btn.disabled = false;
+    return;
+  }
+  if (r.data && r.data.alreadyPresent) {
+    $("modelDlState").textContent = "模型已经在本地了";
+    btn.disabled = false;
+    loadGpu();
+    return;
+  }
+  pollDlProgressTop("/api/models/whisper/download", "modelProg", "modelDlState", 460, "Whisper 模型下载");
+  btn.disabled = false;
+};
+
 /* ==================== 服务状态（v3.81，只读同步） ====================
    数据来自桌面桥的 get_status()：桥自己会用 local-service-ports.json 里的
    **动态端口 + session token** 去探两个服务 —— 前端不许自己去记端口（K：端口每次不同）。 */
