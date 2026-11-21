@@ -624,11 +624,59 @@ class Orchestrator:
 
     # --- 桌面窗口 ---
 
+    def _desktop_hwnd(self) -> int:
+        """找桌面窗口的 hwnd（0 = 没有窗口）。
+
+        为什么不只看 pid：pywebview 的 WebView2 窗口在长时间挂机/显卡资源紧张时
+        可能被系统回收，但**进程还活着**（用户实测：挂一会窗口消失，再点启动
+        却提示"已在运行，不再重复打开" —— PID 骗人，窗口早没了）。
+        """
+        try:
+            from app.common.window_focus import _user32
+            u = _user32()
+            if not u:
+                return 0
+            # build_window 的标题是 "{APP_TITLE} v{APP_VERSION}"；WebView2 偶尔会改写
+            # 后缀，所以先用精确标题找，再退回"以 APP_TITLE 开头"的枚举。
+            hwnd = int(u.FindWindowW(None, f"{APP_TITLE} v{APP_VERSION}") or 0)
+            if hwnd:
+                return hwnd
+            found: list[int] = []
+            WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+            def _cb(hwnd_, _lp):
+                n = u.GetWindowTextLengthW(hwnd_)
+                if n:
+                    buf = ctypes.create_unicode_buffer(n + 1)
+                    u.GetWindowTextW(hwnd_, buf, n + 1)
+                    if (buf.value or "").startswith(APP_TITLE):
+                        found.append(int(hwnd_))
+                return True
+
+            u.EnumWindows(WNDENUMPROC(_cb), 0)
+            return found[0] if found else 0
+        except Exception:
+            return 0
+
     def desktop_running(self) -> int:
         record = read_pid_record(self.desktop_pid_path)
-        if record["pid"] and pid_alive(record["pid"], record["created"]):
-            return record["pid"]
-        return 0
+        pid = record["pid"]
+        if not (pid and pid_alive(pid, record["created"])):
+            return 0
+        if not self._desktop_hwnd():
+            # 进程在、窗口没了 → 僵尸，杀掉让上层重开（否则用户永远打不开）
+            log(f"桌面进程 {pid} 还在但窗口已消失（僵尸），清理后重新打开")
+            try:
+                subprocess.run(["taskkill", "/PID", str(pid), "/F"],
+                               capture_output=True, timeout=15)
+            except Exception:
+                pass
+            try:
+                self.desktop_pid_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return 0
+        return pid
 
     def desktop_host(self) -> Path:
         """选桌面宿主（§7.4 第 9 步）：优先 pythonw.exe，避免闪出一个黑控制台。
@@ -712,7 +760,22 @@ class Orchestrator:
             if not services_only:
                 pid = self.desktop_running()
                 if pid:
-                    log(f"桌面窗口已在运行 (pid={pid})，不再重复打开")
+                    # 已有窗口：**把它切到前台**（原来只打一行日志就退出 ——
+                    # 用户点了启动却看不到窗口，以为坏了）。
+                    hwnd = self._desktop_hwnd()
+                    raised = False
+                    if hwnd:
+                        try:
+                            from app.common.window_focus import bring_to_front
+                            raised = bring_to_front(hwnd)
+                        except Exception:
+                            raised = False
+                    if raised:
+                        log(f"桌面窗口已在运行 (pid={pid})，已切到前台")
+                    else:
+                        log(f"桌面窗口已在运行 (pid={pid})，但切前台失败 —— "
+                            "如果还是看不到窗口，结束该进程后重新启动即可"
+                            "（任务管理器里找 Live Stream Clips）")
                 else:
                     self.start_desktop()
             return 0
