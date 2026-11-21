@@ -312,6 +312,23 @@ class DouyinClient:
         url = f"https://live.douyin.com/{web_rid}"
         return (await self._fetch(url, self.headers))[1]
 
+    async def _get_with_retry(self, url: str, headers: dict):
+        """先按环境代理（trust_env=True）请求，连接类失败再直连重试一次。"""
+        last_exc: Exception | None = None
+        for trust_env in (True, False):
+            try:
+                async with httpx.AsyncClient(headers=headers, cookies=dict(_COOKIE_JAR),
+                                             follow_redirects=True,
+                                             timeout=self.timeout,
+                                             trust_env=trust_env) as c:
+                    return await c.get(url)
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ProxyError,
+                    httpx.ReadTimeout) as exc:
+                last_exc = exc
+                continue
+        assert last_exc is not None
+        raise last_exc
+
     async def _fetch(self, url: str, headers: dict) -> tuple[str, str]:
         """带**会话 cookie** 的 GET，返回 ``(最终URL, 文本)``。
 
@@ -320,11 +337,11 @@ class DouyinClient:
         原来每次都是"全新陌生客户端且零 cookie"，正是匿名被风控判爬虫的典型特征。
         """
         _before_request()
+        # v1.0.2：虚拟机/受限网络里常出现 "All connection attempts failed" ——
+        # 多半是 httpx 继承了系统代理环境变量（trust_env=True）而代理不通，
+        # 或者直连被挡。两种策略各试一次，谁通算谁（原来是单路，一路失败就整体失败）。
         try:
-            async with httpx.AsyncClient(headers=headers, cookies=dict(_COOKIE_JAR),
-                                         follow_redirects=True,
-                                         timeout=self.timeout) as c:
-                r = await c.get(url)
+            r = await self._get_with_retry(url, headers)
             _remember(r.cookies)
             r.raise_for_status()
         except httpx.HTTPStatusError as e:
@@ -429,7 +446,30 @@ class DouyinClient:
         if kind == "empty":
             raise LiveRecorderError("请先填写抖音号、直播间链接或分享短链")
         if kind == "web_rid":
-            info = await self.resolve_identifier(value)
+            try:
+                info = await self.resolve_identifier(value)
+            except LiveRecorderError as exc:
+                cause = exc.__cause__
+                net = isinstance(cause, (httpx.ConnectError, httpx.ConnectTimeout,
+                                         httpx.ProxyError, httpx.ReadTimeout)) or \
+                    "connection attempts failed" in str(exc).lower()
+                if not net:
+                    raise
+                # 链接里的房间号本身就能直接录制：联网只用来取昵称/确认开播。
+                # 网络不通时**不阻断添加**（v1.0.2：虚拟机实测 All connection attempts failed）。
+                return {
+                    "webRid": value,
+                    "title": f"直播间 {value}",
+                    "anchor": "",
+                    "avatar": "",
+                    "status": 0,
+                    "live": None,
+                    "offline": True,
+                    "inputKind": "web_rid",
+                    "channelUrl": f"https://live.douyin.com/{value}",
+                    "note": ("没能联网校验（网络或代理不通），已按链接里的房间号 "
+                             f"{value} 添加；开播后照样能录，昵称等下次刷新会补上。"),
+                }
             info["inputKind"] = "web_rid"
             return info
 
