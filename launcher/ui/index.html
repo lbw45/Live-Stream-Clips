@@ -5139,6 +5139,11 @@ $("btnResolve").addEventListener("click", async function () {
 
 function resolveDesc(input, info) {
   /* v3.32：按解析来源给出「这个值是怎么来的」的一句话（唯一实现，别在别处再拼一遍） */
+  if (info && info.offline) {
+    /* v1.0.2：网络/代理不通时后端按链接里的房间号兜底，这里要如实说明 */
+    return "没能联网校验（网络或代理不通）—— 已按链接里的房间号 <b>" + esc(input) +
+      "</b> 添加，开播后照样能录";
+  }
   const kind = (info && info.inputKind) || "web_rid";
   if (kind === "short") {
     return "已从分享短链解析出可监控标识 <b>" + esc(input) + "</b>";
